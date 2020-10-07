@@ -37,7 +37,7 @@ namespace DoormatCore.Sites
             this.CanSetClientSeed = false;
             this.CanTip = false;
             this.CanVerify = false;
-            this.Currencies = new string[] { "btc", "eth", "ltc", "trx", "bch", "doge" };
+            this.Currencies = new string[] { "btc", "eth", "ltc", "trx", "bch", "doge", "xrp" };
             SupportedGames = new Games.Games[] { Games.Games.Dice };
             this.Currency = 0;
             this.DiceBetURL = "https://bit-exo.com/{0}";
@@ -260,6 +260,7 @@ namespace DoormatCore.Sites
             public string doge { get; set; }
             public string trx { get; set; }
             public string bch { get; set; }
+            public string xrp { get; set; }
         }
 
         public class Next
@@ -298,6 +299,7 @@ namespace DoormatCore.Sites
             public WBStat ltc { get; set; }
             public WBStat trx { get; set; }
             public WBStat bch { get; set; }
+            public WBStat xrp { get; set; }
         }
 
         public class WolfBetStats
