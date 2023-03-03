@@ -33,7 +33,7 @@
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="3.0.2" />
     <PackageReference Include="Jint" Version="3.0.0-beta-1715" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.6.0-1.final" />
-    <PackageReference Include="MongoDB.Driver" Version="2.10.3" />
+    <PackageReference Include="MongoDB.Driver" Version="2.19.0" />
     <PackageReference Include="MoonSharp" Version="2.0.0" />
     <PackageReference Include="MySql.Data" Version="8.0.19" />
     <PackageReference Include="NBitcoin" Version="5.0.30" />
