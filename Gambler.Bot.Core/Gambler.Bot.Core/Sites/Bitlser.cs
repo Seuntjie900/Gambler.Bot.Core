@@ -46,7 +46,10 @@ namespace Gambler.Bot.Core.Sites
 
         public Bitsler(ILogger logger):base(logger)
         {
-            StaticLoginParams = new LoginParameter[] { new LoginParameter("Username", false, true, false, false), new LoginParameter("Password", true, true, false, true), new LoginParameter("API Key", true, true, false, true), new LoginParameter("2FA Code", false, true, true, true, true) };
+            StaticLoginParams = new LoginParameter[] { new LoginParameter("Username", false, true, false, false)
+                , new LoginParameter("Password", true, true, false, true)
+                , new LoginParameter("API Key", true, true, false, true)
+                , new LoginParameter("2FA Code", false, false, true, true, true) };
             Currencies = sCurrencies;
             DiceBetURL = "https://www.bitsler.com/?ref=seuntjie/";
             SiteURL = "https://www.bitsler.com/?ref=seuntjie";
