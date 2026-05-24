@@ -2,6 +2,7 @@
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -78,7 +79,7 @@ namespace Gambler.Bot.Core.Sites
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
             TwistSettings = new TwistConfig() { Edge = 2, MaxRoll = 99m };
-            LimboSettings = new LimboConfig() { Edge = 2, MinChance = 0.000098m };
+            LimboSettings = new LimboConfig() { Edge = 2, MaxPayout = 1000000 };
         }
 
 
@@ -863,9 +864,9 @@ devise:btc*/
         {
             try
             {
-                if ((100m - LimboSettings.Edge) / bet.Chance < LimboSettings.MinChance)
+                if (bet.Payout > LimboSettings.MaxPayout)
                 {
-                    callError("Chance must be more than " + LimboSettings.MinChance, false, ErrorType.InvalidBet);
+                    callError("Payout must be less than " + LimboSettings.MaxPayout, false, ErrorType.InvalidBet);
                     return null;
                 }
 
@@ -881,7 +882,7 @@ devise:btc*/
                 //pairs.Add(new KeyValuePair<string, string>("type", "dice"));
                 pairs.Add(new KeyValuePair<string, string>("amount", bet.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo)));
 
-                pairs.Add(new KeyValuePair<string, string>("payout", ((100m - LimboSettings.Edge) / bet.Chance).ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo)));
+                pairs.Add(new KeyValuePair<string, string>("payout", bet.Payout.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("currency", CurrentCurrency));
                 pairs.Add(new KeyValuePair<string, string>("api_key", "0b2edbfe44e98df79665e52896c22987445683e78"));
                 pairs.Add(new KeyValuePair<string, string>("jp_optin", "0"));
@@ -908,7 +909,7 @@ devise:btc*/
                         lastupdate = DateTime.Now;
                         LimboBet tmp = bsbase.ToLimboBet();
                         tmp.Currency = CurrentCurrency;
-                        tmp.Chance = bet.Chance;
+                        tmp.Payout = bet.Payout;
                         tmp.Guid = bet.GUID;
                         Stats.Profit += (decimal)tmp.Profit;
                         Stats.Wagered += (decimal)tmp.TotalAmount;

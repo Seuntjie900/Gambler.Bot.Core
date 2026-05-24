@@ -1,16 +1,17 @@
-﻿using Gambler.Bot.Common.Helpers;
+﻿using Gambler.Bot.Common.Games.Dice;
+using Gambler.Bot.Common.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Gambler.Bot.Common.Games.Dice
+namespace Gambler.Bot.Common.Games.Twist
 {
     public class TwistBet : Bet
     {
         public TwistBet()
         {
-            Game = Games.Dice;
+            Game = Games.Twist;
         }
         public decimal Roll { get; set; }
         public bool High { get; set; }

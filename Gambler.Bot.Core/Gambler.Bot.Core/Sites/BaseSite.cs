@@ -7,6 +7,7 @@ using Gambler.Bot.Common.Games.HiLo;
 using Gambler.Bot.Common.Games.Limbo;
 using Gambler.Bot.Common.Games.Plinko;
 using Gambler.Bot.Common.Games.Roulette;
+using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Common.Interfaces;
 using Gambler.Bot.Core.Events;
@@ -386,7 +387,7 @@ namespace Gambler.Bot.Core.Sites
                         callError("Bet cannot be < 0.", false, ErrorType.BetTooLow);
                         return;
                     }
-                    callNotify($"Placing Limbo Bet: {limbobet.Amount:0.00######} with {limbobet.Chance:0.0000}% chance");
+                    callNotify($"Placing Limbo Bet: {limbobet.Amount:0.00######} with {limbobet.Payout:0.0000} payout");
                     result = await limbosite.PlaceLimboBet(limbobet);
                 }
                 if (BetDetails is PlaceTwistBet twistbet && this is iTwist twistsite)

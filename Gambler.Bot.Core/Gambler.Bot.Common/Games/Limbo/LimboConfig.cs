@@ -7,6 +7,6 @@ namespace Gambler.Bot.Common.Games.Limbo
     public class LimboConfig : IGameConfig
     {
         public decimal Edge { get; set; }
-        public decimal MinChance { get; set; }
+        public decimal MaxPayout { get; set; }
     }
 }

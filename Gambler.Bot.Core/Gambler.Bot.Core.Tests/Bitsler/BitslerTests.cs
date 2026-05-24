@@ -1,5 +1,6 @@
 ﻿using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Core.Sites;
 using Gambler.Bot.Core.Tests.Code;
 using System;

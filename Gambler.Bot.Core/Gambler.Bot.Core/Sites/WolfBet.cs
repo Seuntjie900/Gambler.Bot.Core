@@ -65,7 +65,7 @@ namespace Gambler.Bot.Core.Sites
             this.DiceBetURL = "https://Wolfbet.com?c=Seuntjie/{0}";
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
-            LimboSettings = new LimboConfig { Edge = 1, MinChance = 0.000099m };
+            LimboSettings = new LimboConfig { Edge = 1, MaxPayout = 1000000m };
             NonceBased = true;
 
         }
@@ -306,12 +306,12 @@ namespace Gambler.Bot.Core.Sites
             try
             {
 
-                decimal tmpchance = Math.Round(((100m - LimboSettings.Edge) / bet.Chance), 2);
+                
                 WolfPlaceLimboBet tmp = new WolfPlaceLimboBet
                 {
                     amount = bet.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo),
                     currency = CurrentCurrency,
-                    multiplier = tmpchance.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo)                    
+                    multiplier = bet.Payout.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo)                    
                 };
                 string LoginString = JsonSerializer.Serialize(tmp);
                 HttpContent cont = new StringContent(LoginString);
@@ -340,7 +340,7 @@ namespace Gambler.Bot.Core.Sites
                             Guid = bet.GUID,
                             Nonce = result.bet.nonce,
                             BetID = result.bet.hash,                            
-                            Chance = (100 - LimboSettings.Edge) / decimal.Parse(result.bet.multiplier, System.Globalization.NumberFormatInfo.InvariantInfo),
+                            Payout = decimal.Parse(result.bet.multiplier, System.Globalization.NumberFormatInfo.InvariantInfo),
                             Result = decimal.Parse(result.bet.result_value, System.Globalization.NumberFormatInfo.InvariantInfo),
                             Profit = decimal.Parse(result.bet.profit, System.Globalization.NumberFormatInfo.InvariantInfo),
                             ServerHash = result.bet.server_seed_hashed

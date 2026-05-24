@@ -103,7 +103,7 @@ namespace Gambler.Bot.Core.Sites
             GameName = "BetGameDice";
             StatGameName = "dice";
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 100m };
-            LimboSettings = new LimboConfig() { Edge = 1, MinChance = 0.00099m };
+            LimboSettings = new LimboConfig() { Edge = 1, MaxPayout = 1000000 };
         }
 
 
@@ -433,7 +433,7 @@ namespace Gambler.Bot.Core.Sites
             try
             {
                 decimal amount = BetDetails.Amount;
-                decimal payout = ((100m - LimboSettings.Edge) / BetDetails.Chance);
+                decimal payout = BetDetails.Payout;
 
                 /*if (amount < 10000 && (DateTime.Now - Lastbet).TotalMilliseconds < 500)
                 {
@@ -1021,7 +1021,7 @@ x-operation-type: query*/
                 LimboBet bet = new LimboBet
                 {
                     TotalAmount = amount,
-                    Chance =(100m-edge)/ state.multiplierTarget,
+                    Payout = state.multiplierTarget,
 
                     Currency = currency,
                     DateValue = DateTime.Now,
