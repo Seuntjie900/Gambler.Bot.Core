@@ -470,6 +470,13 @@ namespace Gambler.Bot.Core.Sites
             public decimal eth { get; set; }
             public decimal ltc { get; set; }
             public decimal doge { get; set; }
+            public decimal bch { get; set; }
+            public decimal ton { get; set; }
+            public decimal trx { get; set; }
+            public decimal usdt { get; set; }
+            public decimal win { get; set; }
+            public decimal xrp { get; set; }
+            public decimal bnb { get; set; }
         }
         public class WDPlaceBet
         {
