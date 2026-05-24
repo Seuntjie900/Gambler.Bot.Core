@@ -30,50 +30,60 @@ namespace Gambler.Bot.Core.Tests
             .AddUserSecrets<BaseSiteTests>()
             .Build();
             string file = config["DICETESTACCOUNTS"];
-            if (file==null)
+            SiteLogins[] logins = null;
+            if (file == null)
             {
                 file = Environment.GetEnvironmentVariable("DICETESTACCOUNTS");
+                logins = JsonSerializer.Deserialize<SiteLogins[]>(file);
             }
-            if (File.Exists(file))
+            else if (File.Exists(file))
             {
                 string loginthings = File.ReadAllText(file);
-                SiteLogins[] logins = JsonSerializer.Deserialize<SiteLogins[]>(loginthings);
-                LoginParamValue[] values = logins.FirstOrDefault(x => x.site.ToLower() == Sitename.ToLower() && x.test.ToLower() == callerName.ToLower())?.loginParams;
-                if (values==null)
-                {
-                    Assert.True(false, $"No login details found for {Sitename} in {file}");
-                }
-                foreach (var x in values)
-                {
-                    if (x.Param.Name.ToLower()=="2fa code")
-                    {
-                        string tmpvalue = HttpUtility.UrlDecode(x.Value);
-                        Totp totp=null;
-                        if (tmpvalue.StartsWith("otpauth-migration"))
-                        {
-                            tmpvalue = tmpvalue.Substring(tmpvalue.IndexOf("?data=") + "?data=".Length);
-                            byte[] data = Convert.FromBase64String(tmpvalue);
-                            MigrationPayload tmp = MigrationPayload.Parser.ParseFrom(data);
-                            //tmpvalue = tmp.OtpParameters[0].ToString();//extract secret property here
-                            foreach (var otp in tmp.OtpParameters)
-                            {
-                                totp = new Totp(otp.Secret.ToByteArray());
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            totp = new Totp(Base32Encoding.ToBytes(tmpvalue));
-                        }
-                        
-                        
-                        x.Value = totp.ComputeTotp(DateTime.UtcNow);
-                        break;
-                    }
-                }
-                return values;
+                logins = JsonSerializer.Deserialize<SiteLogins[]>(loginthings);
             }
-            return null;
+
+            if (logins == null)
+            {
+                Assert.True(false, $"No login details found at all");
+                return null;
+            }
+
+            LoginParamValue[] values = logins.FirstOrDefault(x => x.site.ToLower() == Sitename.ToLower() && x.test.ToLower() == callerName.ToLower())?.loginParams;
+            if (values==null)
+            {
+                Assert.True(false, $"No login details found for {Sitename} in {file}");
+            }
+            foreach (var x in values)
+            {
+                if (x.Param.Name.ToLower()=="2fa code")
+                {
+                    string tmpvalue = HttpUtility.UrlDecode(x.Value);
+                    Totp totp=null;
+                    if (tmpvalue.StartsWith("otpauth-migration"))
+                    {
+                        tmpvalue = tmpvalue.Substring(tmpvalue.IndexOf("?data=") + "?data=".Length);
+                        byte[] data = Convert.FromBase64String(tmpvalue);
+                        MigrationPayload tmp = MigrationPayload.Parser.ParseFrom(data);
+                        //tmpvalue = tmp.OtpParameters[0].ToString();//extract secret property here
+                        foreach (var otp in tmp.OtpParameters)
+                        {
+                            totp = new Totp(otp.Secret.ToByteArray());
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        totp = new Totp(Base32Encoding.ToBytes(tmpvalue));
+                    }
+                        
+                        
+                    x.Value = totp.ComputeTotp(DateTime.UtcNow);
+                    break;
+                }
+            }
+            return values;
+            
+            
         }
 
         //Tests:

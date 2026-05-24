@@ -202,7 +202,7 @@ namespace Gambler.Bot.Core.Sites
                     ispd = true;
                     lastupdate = DateTime.Now;
 
-                    //new Thread(new ThreadStart(GetBalanceThread)).Start();
+                    new Thread(new ThreadStart(GetBalanceThread)).Start();
                     //lasthash = tmpblogin.server_hash;
                     callLoginFinished(true);
                     return true;
@@ -293,6 +293,7 @@ namespace Gambler.Bot.Core.Sites
         }
         protected override async Task<SiteStats> _UpdateStats()
         {
+            await getbalance();
             if (await getstats())
             {
                 return Stats;
