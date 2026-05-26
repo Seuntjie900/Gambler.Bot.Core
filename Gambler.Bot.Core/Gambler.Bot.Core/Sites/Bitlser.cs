@@ -2,6 +2,7 @@
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -44,7 +45,7 @@ namespace Gambler.Bot.Core.Sites
         public LimboConfig LimboSettings { get; set; }
         public TwistConfig TwistSettings { get; set; }
 
-        public Bitsler(ILogger logger):base(logger)
+        public Bitsler(ILogger logger) : base(logger)
         {
             StaticLoginParams = new LoginParameter[] { new LoginParameter("Username", false, true, false, false)
                 , new LoginParameter("Password", true, true, false, true)
@@ -76,9 +77,9 @@ namespace Gambler.Bot.Core.Sites
             this.CurrentCurrency = "btc";
             this.DiceBetURL = "https://bitvest.io/bet/{0}";
             //this.Edge = 1;
-            DiceSettings = new DiceConfig() { Edge = 1, MaxRoll= 99.99m };
+            DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
             TwistSettings = new TwistConfig() { Edge = 2, MaxRoll = 99m };
-            LimboSettings = new LimboConfig() { Edge = 2, MinChance = 0.000098m };
+            LimboSettings = new LimboConfig() { Edge = 2, MaxPayout = 1000000 };
         }
 
 
@@ -123,7 +124,7 @@ namespace Gambler.Bot.Core.Sites
         {
             try
             {
-                if (BetObj.Chance>99.99m)
+                if (BetObj.Chance > 99.99m)
                 {
                     callError("Chance must be less than 99.99", false, ErrorType.InvalidBet);
                     return null;
@@ -146,12 +147,12 @@ devise:btc*/
                 pairs.Add(new KeyValuePair<string, string>("api_key", "0b2edbfe44e98df79665e52896c22987445683e78"));
                 FormUrlEncodedContent Content = new FormUrlEncodedContent(pairs);
                 HttpResponseMessage tmpmsg = await Client.PostAsync("api/bet-dice", Content);
-                string sEmitResponse =await tmpmsg.Content.ReadAsStringAsync();
-                
+                string sEmitResponse = await tmpmsg.Content.ReadAsStringAsync();
+
                 bsBet bsbase = null;
                 try
                 {
-                    bsbase = JsonSerializer.Deserialize<bsBet>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
+                    bsbase = JsonSerializer.Deserialize<bsBetwithintid>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                 }
                 catch (Exception e)
                 {
@@ -168,6 +169,7 @@ devise:btc*/
                         tmp.High = BetObj.High;
                         tmp.Chance = BetObj.Chance;
                         tmp.Guid = BetObj.GUID;
+                        tmp.Currency = CurrentCurrency;
                         Stats.Profit += (decimal)tmp.Profit;
                         Stats.Wagered += (decimal)tmp.TotalAmount;
                         tmp.DateValue = DateTime.Now;
@@ -191,7 +193,8 @@ devise:btc*/
                     {
                         if (bsbase.error != null)
                         {
-                             ErrorType type = ErrorType.Unknown;
+                            _logger.LogDebug(bsbase.error);
+                            ErrorType type = ErrorType.Unknown;
                             if (bsbase.error == "token_invalid")
                             {
                                 if (await RefreshToken())
@@ -203,23 +206,23 @@ devise:btc*/
                                     type = ErrorType.Other;
                                 }
                             }
-                            if (bsbase.error.StartsWith("Maximum bet") )
+                            if (bsbase.error.StartsWith("Maximum bet"))
                             {
                                 type = ErrorType.InvalidBet;
                             }
-                            else if (bsbase.error== "Bet amount not valid")
+                            else if (bsbase.error == "[amount]: This value should be positive.")
                             {
                                 type = ErrorType.BetTooLow;
                             }
                             else if (bsbase.error.Contains("Bet in progress, please wait few seconds and retry."))
                             {
-                                
+
                             }
-                            else if (bsbase.error == "Insufficient fund")
+                            else if (bsbase.error == "amount_balance")
                                 type = ErrorType.BalanceTooLow;
                             else
                             {
-                                
+
                             }
                             callError(bsbase.error, false, type);
                             return null;
@@ -257,7 +260,7 @@ devise:btc*/
                     pairs.Add(new KeyValuePair<string, string>("seed_client", clientseed));
                     FormUrlEncodedContent Content = new FormUrlEncodedContent(pairs);
                     var response = await Client.PostAsync("api/change-seeds", Content);
-                    string sEmitResponse =await response.Content.ReadAsStringAsync();
+                    string sEmitResponse = await response.Content.ReadAsStringAsync();
                     bsResetSeed bsbase = JsonSerializer.Deserialize<bsResetSeed>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                     if (bsbase.success)
                     {
@@ -313,7 +316,7 @@ devise:btc*/
             {
                 _logger.LogError(ex.ToString());
                 callError("Failed to reset seed", false, ErrorType.ResetSeed);
-                
+
             }
             Thread.Sleep(51);
             return null;
@@ -381,6 +384,7 @@ devise:btc*/
                     pairs.Add(new KeyValuePair<string, string>("access_token", accesstoken));
                     Content = new FormUrlEncodedContent(pairs);
                     resp = await Client.PostAsync("api/getuserstats", Content);
+
                     sEmitResponse = await resp.Content.ReadAsStringAsync();
                     JsonElement bsstatsbase = JsonSerializer.Deserialize<dynamic>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                     if ((object)bsstatsbase != null)
@@ -555,7 +559,7 @@ devise:btc*/
 
         public static IGameResult sGetLucky(string server, string client, int nonce, Games game)
         {
-           string hex = Hash.HMAC512($"{client},{nonce}",server);
+            string hex = Hash.HMAC512($"{client},{nonce}", server);
             if (game == Games.Dice || game == Games.Twist)
             {
                 int charstouse = 5;
@@ -575,26 +579,26 @@ devise:btc*/
                 }
                 else if (game == Games.Twist)
                 {
-                    Lucky=Lucky % 100;
+                    Lucky = Lucky % 100;
                     return new TwistResult { Roll = Lucky };
                 }
             }
-            else if(game == Games.Limbo)
+            else if (game == Games.Limbo)
             {
-                string part = hex.Substring( 0, 52 / 4);
+                string part = hex.Substring(0, 52 / 4);
                 decimal number = long.Parse(part, System.Globalization.NumberStyles.HexNumber) / (decimal)Math.Pow(2, 52);
 
                 decimal multiplier = Math.Floor(98 / (1 - number)) / 100;
 
-                return new LimboResult{ Result= Math.Max(1, Math.Min(multiplier, 1000000))};
+                return new LimboResult { Result = Math.Max(1, Math.Min(multiplier, 1000000)) };
             }
             return null;
         }
 
-        protected override IGameResult _GetLucky( string server, string client, int nonce, Games game)
+        protected override IGameResult _GetLucky(string server, string client, int nonce, Games game)
         {
 
-            return sGetLucky( server, client, nonce, game);
+            return sGetLucky(server, client, nonce, game);
         }
 
 
@@ -614,12 +618,15 @@ devise:btc*/
         {
             //if (bsstatsbase is ExpandoObject exp)
             {
-                Stats.Balance = decimal.Parse(bsstatsbase.GetProperty($"{CurrentCurrency.ToLower()}_balance").GetString(), NumberFormatInfo.InvariantInfo);
+                //Stats.Balance = decimal.Parse(bsstatsbase.GetProperty($"{CurrentCurrency.ToLower()}_balance").GetString(), NumberFormatInfo.InvariantInfo);
                 Stats.Profit = decimal.Parse(bsstatsbase.GetProperty($"{CurrentCurrency.ToLower()}_profit").GetString(), NumberFormatInfo.InvariantInfo);
                 Stats.Wagered = decimal.Parse(bsstatsbase.GetProperty($"{CurrentCurrency.ToLower()}_wagered").GetString(), NumberFormatInfo.InvariantInfo);
+                Stats.Bets = bsstatsbase.GetProperty($"bets").GetInt32();
+                Stats.Wins = bsstatsbase.GetProperty($"wins").GetInt32();
+                Stats.Losses = bsstatsbase.GetProperty($"losses").GetInt32();
             }
             return;
-            
+
 
         }
 
@@ -628,7 +635,7 @@ devise:btc*/
             try
             {
                 List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
-                
+
                 pairs.Add(new KeyValuePair<string, string>("access_token", accesstoken));
                 pairs.Add(new KeyValuePair<string, string>("amount", Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("jp_optin", "0"));
@@ -639,7 +646,7 @@ devise:btc*/
                 HttpResponseMessage tmpmsg = await Client.PostAsync("/api/vault-transaction", Content);
                 string sEmitResponse = await tmpmsg.Content.ReadAsStringAsync();
                 bsLogin result = JsonSerializer.Deserialize<bsLogin>(sEmitResponse);
-                if(tmpmsg.IsSuccessStatusCode && result.success)
+                if (tmpmsg.IsSuccessStatusCode && result.success)
                 {
                     Stats.Balance -= Amount;
                     callStatsUpdated(Stats);
@@ -648,7 +655,7 @@ devise:btc*/
                 }
                 else
                 {
-                    callError("Could not bank funds: "+result.error, false, ErrorType.Bank);
+                    callError("Could not bank funds: " + result.error, false, ErrorType.Bank);
                     _logger.LogError(result.error);
                     callBankFinished(false, result.error);
                     return false;
@@ -667,7 +674,7 @@ devise:btc*/
                 callNotify("An Unknown error has ocurred.");
             }
             return false;
-        
+
         }
         protected override async Task<SiteStats> _UpdateStats()
         {
@@ -710,7 +717,7 @@ devise:btc*/
                 }
                 if (sEmitResponse != "")
                 {
-                    JsonElement bsstatsbase = JsonSerializer.Deserialize< dynamic>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
+                    JsonElement bsstatsbase = JsonSerializer.Deserialize<dynamic>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                     if ((object)bsstatsbase != null)
                         //if (bsstatsbase._return != null)
                         if (bsstatsbase.GetProperty("success").GetBoolean())
@@ -727,11 +734,11 @@ devise:btc*/
                 }
                 return Stats;
             }
-            catch (Exception e) 
+            catch (Exception e)
             {
                 _logger?.LogError(e.ToString());
                 callError("Failed to update stats", false, ErrorType.Other);
-                return null; 
+                return null;
             }
         }
         public async Task<TwistBet> PlaceTwistBet(PlaceTwistBet bet)
@@ -766,7 +773,7 @@ devise:btc*/
                 bsBet bsbase = null;
                 try
                 {
-                    bsbase = JsonSerializer.Deserialize<bsBet>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
+                    bsbase = JsonSerializer.Deserialize<bsBetwithstringid>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                 }
                 catch (Exception e)
                 {
@@ -779,7 +786,8 @@ devise:btc*/
                     {
                         Stats.Balance = decimal.Parse(bsbase.new_balance, System.Globalization.NumberFormatInfo.InvariantInfo);
                         lastupdate = DateTime.Now;
-                        TwistBet tmp = bsbase.ToTwistBet();                       
+                        TwistBet tmp = bsbase.ToTwistBet();
+                        tmp.Currency = CurrentCurrency;
                         tmp.High = bet.High;
                         tmp.Chance = bet.Chance;
                         tmp.Guid = bet.GUID;
@@ -856,9 +864,9 @@ devise:btc*/
         {
             try
             {
-                if ((100m- LimboSettings.Edge)/ bet.Chance < LimboSettings.MinChance)
+                if (bet.Payout > LimboSettings.MaxPayout)
                 {
-                    callError("Chance must be more than "+ LimboSettings.MinChance, false, ErrorType.InvalidBet);
+                    callError("Payout must be less than " + LimboSettings.MaxPayout, false, ErrorType.InvalidBet);
                     return null;
                 }
 
@@ -873,8 +881,8 @@ devise:btc*/
                 pairs.Add(new KeyValuePair<string, string>("access_token", accesstoken));
                 //pairs.Add(new KeyValuePair<string, string>("type", "dice"));
                 pairs.Add(new KeyValuePair<string, string>("amount", bet.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo)));
-                
-                pairs.Add(new KeyValuePair<string, string>("payout", ((100m-LimboSettings.Edge)/bet.Chance).ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo) ));
+
+                pairs.Add(new KeyValuePair<string, string>("payout", bet.Payout.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("currency", CurrentCurrency));
                 pairs.Add(new KeyValuePair<string, string>("api_key", "0b2edbfe44e98df79665e52896c22987445683e78"));
                 pairs.Add(new KeyValuePair<string, string>("jp_optin", "0"));
@@ -886,7 +894,7 @@ devise:btc*/
                 bsBet bsbase = null;
                 try
                 {
-                    bsbase = JsonSerializer.Deserialize<bsBet>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
+                    bsbase = JsonSerializer.Deserialize<bsBetwithstringid>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
                 }
                 catch (Exception e)
                 {
@@ -900,13 +908,14 @@ devise:btc*/
                         Stats.Balance = decimal.Parse(bsbase.new_balance, System.Globalization.NumberFormatInfo.InvariantInfo);
                         lastupdate = DateTime.Now;
                         LimboBet tmp = bsbase.ToLimboBet();
-                        tmp.Chance = bet.Chance;
+                        tmp.Currency = CurrentCurrency;
+                        tmp.Payout = bet.Payout;
                         tmp.Guid = bet.GUID;
                         Stats.Profit += (decimal)tmp.Profit;
                         Stats.Wagered += (decimal)tmp.TotalAmount;
                         tmp.DateValue = DateTime.Now;
                         tmp.IsWin = tmp.GetWin(LimboSettings);
-                        
+
                         //set win
                         if (tmp.IsWin)
                             Stats.Wins++;
@@ -1097,36 +1106,54 @@ devise:btc*/
 
 
 
-        public class bsBet
+        public class bsBetwithstringid:bsBet
         {
-            public bool success { get; set; }
-            public string username { get; set; }
             public string id { get; set; }
-            public string currency { get; set; }
-            public int timestamp { get; set; }
-            public string amount { get; set; }
-            public float result { get; set; }
-            public decimal payout { get; set; }
-            public string profit { get; set; }
-            public string new_balance { get; set; }
-            public float xp { get; set; }
-            public float xp_add { get; set; }
+
+            public override string GetId()
+            {
+                return id;
+            }
+        }
+        public class bsBetwithintid : bsBet
+        {
+            public long id { get; set; }
+            public override string GetId()
+            {
+                return id.ToString();
+            }
+        }
+        public abstract class bsBet
+        {
+            public string error { get; set; }
+            public bool success { get; set; }
+            public decimal result { get; set; }
             public string server_seed { get; set; }
             public string client_seed { get; set; }
-            public int nonce { get; set; }
+            public long nonce { get; set; }
+           
+            public int timestamp { get; set; }
+            public string amount { get; set; }
+            public string currency { get; set; }
+            public decimal payout { get; set; }
+            public string profit { get; set; }
+            public decimal xp { get; set; }
+            public decimal xp_add { get; set; }
+            public string username { get; set; }
+            public string new_balance { get; set; }
             public object[] notifications { get; set; }
-            
-            public string error { get; set; }
+            public abstract string GetId();
+
             public DiceBet ToBet()
             {
                 DiceBet tmp = new DiceBet
                 {
                     TotalAmount = decimal.Parse(amount, System.Globalization.NumberFormatInfo.InvariantInfo),
                     DateValue = DateTime.Now,
-                    BetID = id,
+                    BetID = GetId(),
                     Profit = decimal.Parse(profit, System.Globalization.NumberFormatInfo.InvariantInfo),
                     Roll = (decimal)result,
-                   
+
                     Nonce = nonce,
                     ServerHash = server_seed,
                     ClientSeed = client_seed
@@ -1139,7 +1166,7 @@ devise:btc*/
                 {
                     TotalAmount = decimal.Parse(amount, System.Globalization.NumberFormatInfo.InvariantInfo),
                     DateValue = DateTime.Now,
-                    BetID = id,
+                    BetID = GetId(),
                     Profit = decimal.Parse(profit, System.Globalization.NumberFormatInfo.InvariantInfo),
                     Roll = (decimal)result,
 
@@ -1155,10 +1182,10 @@ devise:btc*/
                 {
                     TotalAmount = decimal.Parse(amount, System.Globalization.NumberFormatInfo.InvariantInfo),
                     DateValue = DateTime.Now,
-                    BetID = id,
+                    BetID = GetId(),
                     Profit = decimal.Parse(profit, System.Globalization.NumberFormatInfo.InvariantInfo),
                     Result = (decimal)result,
-                    
+
                     Nonce = nonce,
                     ServerHash = server_seed,
                     ClientSeed = client_seed
@@ -1166,7 +1193,8 @@ devise:btc*/
                 return tmp;
             }
         }
-       
+
+        
         public class bsResetSeed
         {
             public string previous_hash { get; set; }

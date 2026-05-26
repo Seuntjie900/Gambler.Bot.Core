@@ -10,7 +10,7 @@ namespace Gambler.Bot.Common.Games.Limbo
         /// Bet high when true, low when false
         /// </summary>
 
-        public decimal Chance { get; set; }
+        public decimal Payout { get; set; }
 
         /// <summary>
         /// The unique internal identifier to detect duplicate or skipped bets.
@@ -20,14 +20,14 @@ namespace Gambler.Bot.Common.Games.Limbo
         public PlaceLimboBet(decimal Amount, decimal Payout, string Guid)
         {
             this.Amount = Amount;
-            this.Chance = Payout;
+            this.Payout = Payout;
             GUID = GUID;
             Game = Games.Limbo;
         }
         public PlaceLimboBet(decimal Amount, decimal Payout)
         {
             this.Amount = Amount;
-            this.Chance = Payout;
+            this.Payout = Payout;
             Game = Games.Limbo;
 
         }

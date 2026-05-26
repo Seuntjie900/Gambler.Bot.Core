@@ -55,7 +55,7 @@ namespace Gambler.Bot.Core.Sites
             this.DiceBetURL = "https://bch.games/bet/{0}";
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 2, MaxRoll = 99.99m };
-            LimboSettings = new LimboConfig() { Edge = 2, MinChance = 0.000098m };
+            LimboSettings = new LimboConfig() { Edge = 2, MaxPayout = 1000000 };
             CrashSettings = new CrashConfig() { Edge = 1, IsMultiplayer = true };
             NonceBased = true;
             this.Mirrors.Add("https://bch.games");

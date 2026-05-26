@@ -1,7 +1,7 @@
 ﻿using Gambler.Bot.Common.Games.Limbo;
 using System;
 
-namespace Gambler.Bot.Common.Games.Dice
+namespace Gambler.Bot.Common.Games.Twist
 {
     public interface iTwist
     {
