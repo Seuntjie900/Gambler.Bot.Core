@@ -22,7 +22,7 @@ public class RangeDiceBet : Bet
         return new PlaceRangeDiceBet(Type, TotalAmount, Min,Max, Min2, Max2);
     }
 
-    public override bool GetWin(Dice.IGameConfig config)
+    public override bool GetWin(IGameConfig config)
     {
         switch (Type)
         {
@@ -34,7 +34,10 @@ public class RangeDiceBet : Bet
         
     }
 
-   
+   public string Range
+   {
+       get => ToRange();
+   }
 
     string ToRange()
     {
@@ -47,7 +50,7 @@ public class RangeDiceBet : Bet
         }
     }
     
-    public override string ToCSV(Dice.IGameConfig gamecofig, long TotalBetsPlaced, decimal Balance)
+    public override string ToCSV(IGameConfig gamecofig, long TotalBetsPlaced, decimal Balance)
     {
         return string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}"
             , TotalBetsPlaced, Roll, Type.ToString(), ToRange(), GetWin(gamecofig) ? "win" : "lose", TotalAmount, Profit, Balance, Profit);

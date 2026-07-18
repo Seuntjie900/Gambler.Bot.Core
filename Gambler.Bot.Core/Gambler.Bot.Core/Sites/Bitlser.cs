@@ -994,7 +994,7 @@ devise:btc*/
             public string error { get; set; }
         }
 
-        public class bsloginbase
+        public class BsLoginBase
         {
             public bsLogin _return { get; set; }
         }
