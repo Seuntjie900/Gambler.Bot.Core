@@ -2,6 +2,7 @@
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -23,7 +24,7 @@ using static Gambler.Bot.Core.Sites.PrimeDice;
 
 namespace Gambler.Bot.Core.Sites
 {
-    public class Stake : BaseSite, iDice, iLimbo
+    public class Stake : BaseSite, iDice, iLimbo, iRangeDice
     {
         protected string URL = "/_api/graphql";
         protected string RolName = "primediceRoll";
@@ -93,7 +94,7 @@ namespace Gambler.Bot.Core.Sites
                 "UNI",
                 "POl"
             };
-            SupportedGames = new Games[] { Games.Dice, Games.Limbo };
+            SupportedGames = new Games[] { Games.Dice, Games.Limbo,Games.RangeDice };
             CurrentCurrency = "btc";
             this.DiceBetURL = "https://stake.com/bet/{0}";
             //this.Edge = 2;
@@ -104,6 +105,7 @@ namespace Gambler.Bot.Core.Sites
             StatGameName = "dice";
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 100m };
             LimboSettings = new LimboConfig() { Edge = 1, MaxPayout = 1000000 };
+            RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll= 100m, SupportsDouble=true };
         }
 
 
@@ -265,6 +267,7 @@ namespace Gambler.Bot.Core.Sites
         public DiceConfig DiceSettings { get; set; }
 
         public LimboConfig LimboSettings { get; set; }
+        public RangeDiceConfig RangeDiceSettings { get; set; }
 
         public async Task<DiceBet> PlaceDiceBet(PlaceDiceBet BetDetails)
         {
@@ -752,6 +755,104 @@ x-operation-type: query*/
             return false;
         }
 
+        public async Task<RangeDiceBet> PlaceRangeDiceBet(PlaceRangeDiceBet BetDetails)
+        {
+            try
+            {
+                string condition = BetDetails.Type switch
+                {
+                    RangeDiceType.Out => "rollOutside",
+                    RangeDiceType.Double => "rollBetweenTwo",
+                    _ => "rollBetween"
+                };
+
+                decimal? target3 = BetDetails.Type == RangeDiceType.Double ? BetDetails.Min2 : (decimal?)null;
+                decimal? target4 = BetDetails.Type == RangeDiceType.Double ? BetDetails.Max2 : (decimal?)null;
+
+                GraphqlRequestPayload betresult = new GraphqlRequestPayload
+                {
+                    operationName = "PrimediceXBet",
+                    query =
+                        "mutation primediceRoll($target1:Float! $target2:Float! $target3:Float $target4:Float $condition:CasinoGamePrimediceConditionEnum! $identifier:String! $amount:Float! $currency:CurrencyEnum!){primediceRoll(target1:$target1 target2:$target2 target3:$target3 target4:$target4 condition:$condition identifier:$identifier amount:$amount currency:$currency){id active currency amount payout payoutMultiplier amountMultiplier state{result target1 target2 target3 target4 condition}}}",
+                    variables = new
+                    {
+                        target1 = BetDetails.Min,
+                        target2 = BetDetails.Max,
+                        target3,
+                        target4,
+                        condition,
+                        identifier = this.Random.RandomString(21),
+                        amount = BetDetails.Amount,
+                        currency = CurrentCurrency.ToLower()
+                    }
+                };
+
+                var response = await Client.PostAsync(
+                    URLInUse + URL,
+                    new StringContent(JsonSerializer.Serialize(betresult), Encoding.UTF8, "application/json"));
+
+                var responsestring = await response.Content.ReadAsStringAsync();
+                Payload ResponsePayload = JsonSerializer.Deserialize<Payload>(responsestring);
+
+                if (ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
+                {
+                    string error = ResponsePayload.errors[0].message;
+                    ErrorType errorType = ErrorType.Unknown;
+
+                    if (error == ("Number too small."))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("Maximum bet exceeded"))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("Amount too small"))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("You do not have enough balance to do that."))
+                    {
+                        errorType = ErrorType.BalanceTooLow;
+                    }
+
+                    callError(error, false, errorType);
+                    return null;
+                }
+
+                StakePrimediceXBet tmp = ResponsePayload?.data?.primediceXBet;
+                if (tmp == null)
+                {
+                    callError(responsestring, false, ErrorType.Unknown);
+                    return null;
+                }
+
+                Lastbet = DateTime.Now;
+                lastupdate = DateTime.Now;
+
+                RangeDiceBet tmpbet = tmp.ToBet();
+                tmpbet.IsWin = tmpbet.GetWin(RangeDiceSettings);
+                tmpbet.Guid = BetDetails.GUID;
+
+                this.Stats.Bets++;
+                this.Stats.Wins += tmpbet.IsWin ? 1 : 0;
+                this.Stats.Losses += tmpbet.IsWin ? 0 : 1;
+                this.Stats.Profit += tmpbet.Profit;
+                this.Stats.Wagered += tmpbet.TotalAmount;
+                this.Stats.Balance += tmpbet.Profit;
+
+                callBetFinished(tmpbet);
+                retrycount = 0;
+                return tmpbet;
+            }
+            catch (Exception e)
+            {
+                callNotify("Error occurred while placing range dice bet.");
+                _logger?.LogError(e.ToString());
+            }
+            return null;
+        }
+
         public class StakeVaultDepost
         {
             public string currency { get; set; }
@@ -987,6 +1088,8 @@ x-operation-type: query*/
 
             public StakeLimboBet limboBet { get; set; }
 
+            public StakePrimediceXBet primediceXBet { get; set; }
+
             public StakeVaultDepost createVaultDeposit { get; set; }
             public Rotateserverseed rotateServerSeed { get; set; }
             public Changeclientseed changeClientSeed { get; set; }
@@ -1042,6 +1145,61 @@ x-operation-type: query*/
             public decimal result { get; set; }
 
             public decimal multiplierTarget { get; set; }
+        }
+
+        public class StakePrimediceXState
+        {
+            public decimal result   { get; set; }
+            public decimal target1  { get; set; }
+            public decimal target2  { get; set; }
+            public decimal? target3 { get; set; }
+            public decimal? target4 { get; set; }
+            public string condition { get; set; }
+        }
+
+        public class StakePrimediceXBet
+        {
+            public string id                { get; set; }
+            public bool active              { get; set; }
+            public string currency          { get; set; }
+            public decimal amount           { get; set; }
+            public decimal payout           { get; set; }
+            public decimal payoutMultiplier { get; set; }
+            public decimal amountMultiplier { get; set; }
+            public StakePrimediceXState state { get; set; }
+            public pdUser user              { get; set; }
+
+            public RangeDiceBet ToBet()
+            {
+                RangeDiceType type = state.condition switch
+                {
+                    "rollOutside"    => RangeDiceType.Out,
+                    "rollBetweenTwo" => RangeDiceType.Double,
+                    _                => RangeDiceType.In
+                };
+
+                RangeDiceBet bet = new RangeDiceBet
+                {
+                    TotalAmount = amount,
+                    Currency    = currency,
+                    DateValue   = DateTime.Now,
+                    BetID       = id,
+                    Roll        = state.result,
+                    Type        = type,
+                    Min         = state.target1,
+                    Max         = state.target2,
+                    Min2        = state.target3 ?? 0m,
+                    Max2        = state.target4 ?? 0m
+                };
+                bet.IsWin  = payoutMultiplier > 1m;
+                bet.Profit = bet.IsWin ? payout - amount : -amount;
+                return bet;
+            }
+        }
+
+        public class StakePrimediceXResponse
+        {
+            public StakePrimediceXBet primediceXBet { get; set; }
         }
 
         public class RootObject

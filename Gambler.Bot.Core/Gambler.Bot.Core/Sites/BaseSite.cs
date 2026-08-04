@@ -6,6 +6,7 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.HiLo;
 using Gambler.Bot.Common.Games.Limbo;
 using Gambler.Bot.Common.Games.Plinko;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Games.Roulette;
 using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
@@ -197,6 +198,10 @@ namespace Gambler.Bot.Core.Sites
                     if (this is iCrash crash)
                     {
                         SiteDetails.GameSettings.Add("Crash", crash.CrashSettings);
+                    }
+                    if (this is iRangeDice range)
+                    {
+                        SiteDetails.GameSettings.Add("RangeDice", range.RangeDiceSettings);
                     }
                 }
                 return siteDetails;
@@ -399,6 +404,15 @@ namespace Gambler.Bot.Core.Sites
                     }
                     callNotify($"Placing Twist Bet: {twistbet.Amount:0.00######} with {twistbet.Chance:0.0000}% payout");
                     result = await twistsite.PlaceTwistBet(twistbet);
+                }
+                if (BetDetails is PlaceRangeDiceBet rangeBet && this is iRangeDice rangeSite)
+                {
+                    if (rangeBet.Amount < 0)
+                    {
+                        callError("Bet cannot be < 0.", false, ErrorType.BetTooLow);
+                        return;
+                    }
+                    result = await rangeSite.PlaceRangeDiceBet(rangeBet);
                 }
             });
             return result;

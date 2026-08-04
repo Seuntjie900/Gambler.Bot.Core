@@ -4,7 +4,7 @@ public class RangeDiceBet : Bet
 {
     public RangeDiceBet()
     {
-        Game = Games.Dice;
+        Game = Games.RangeDice;
     }
     public RangeDiceType Type { get; set; }
     public decimal Roll { get; set; }
