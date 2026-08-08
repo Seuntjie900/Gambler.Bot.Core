@@ -66,6 +66,7 @@ namespace Gambler.Bot.Core.Sites
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
             NonceBased = true;
+            this.IsEnabled = false;
         }
 
         public override void SetProxy(ProxyDetails ProxyInfo)
