@@ -27,7 +27,7 @@ public class RangeDiceBet : Bet
         switch (Type)
         {
             default:
-            case RangeDiceType.In: return Roll > Min && Roll < Min; 
+            case RangeDiceType.In: return Roll > Min && Roll < Max; 
             case RangeDiceType.Out: return Roll < Min || Roll > Max;
             case RangeDiceType.Double: return Roll > Min && Roll < Max || Roll > Min2 && Roll < Max2;
         }
