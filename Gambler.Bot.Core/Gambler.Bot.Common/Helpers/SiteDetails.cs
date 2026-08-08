@@ -1,4 +1,4 @@
-﻿using Gambler.Bot.Common.Games.Dice;
+﻿using Gambler.Bot.Common.Games;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;

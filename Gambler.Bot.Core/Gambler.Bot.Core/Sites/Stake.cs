@@ -2,6 +2,7 @@
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -11,19 +12,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
-using static Gambler.Bot.Core.Sites.Bitsler;
-using static Gambler.Bot.Core.Sites.Bitvest;
 using static Gambler.Bot.Core.Sites.PrimeDice;
 
 namespace Gambler.Bot.Core.Sites
 {
-    public class Stake : BaseSite, iDice, iLimbo
+    public class Stake : BaseSite, iDice, iLimbo//, iRangeDice
     {
         protected string URL = "/_api/graphql";
         protected string RolName = "primediceRoll";
@@ -93,7 +90,7 @@ namespace Gambler.Bot.Core.Sites
                 "UNI",
                 "POl"
             };
-            SupportedGames = new Games[] { Games.Dice, Games.Limbo };
+            SupportedGames = new Games[] { Games.Dice, Games.Limbo/*, Games.RangeDice*/ };
             CurrentCurrency = "btc";
             this.DiceBetURL = "https://stake.com/bet/{0}";
             //this.Edge = 2;
@@ -104,6 +101,7 @@ namespace Gambler.Bot.Core.Sites
             StatGameName = "dice";
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 100m };
             LimboSettings = new LimboConfig() { Edge = 1, MaxPayout = 1000000 };
+            RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll = 100m, SupportsDouble = true };
         }
 
 
@@ -135,13 +133,13 @@ namespace Gambler.Bot.Core.Sites
             {
                 string APIKey = "";
 
-                foreach(LoginParamValue x in LoginParams)
+                foreach (LoginParamValue x in LoginParams)
                 {
-                    if(x.Param.Name.ToLower() == "api key")
+                    if (x.Param.Name.ToLower() == "api key")
                         APIKey = x.Value;
                 }
                 //CookieContainer cookies = new CookieContainer();
-                var cookies = await CallBypassRequired(URLInUse+AffiliateCode, ["__cf_bm"]);
+                var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["__cf_bm"]);
 
                 HttpClientHandler handler = new HttpClientHandler
                 {
@@ -152,12 +150,12 @@ namespace Gambler.Bot.Core.Sites
                 Client = new HttpClient(handler);
                 Client.BaseAddress = new Uri(URLInUse + URL);
 
-                
+
                 foreach (var x in cookies.Headers)
                 {
                     try
                     {
-                        if (x.Key.ToLower() == "content-type" 
+                        if (x.Key.ToLower() == "content-type"
                             || x.Key.ToLower() == "cookie"
                             || x.Key.ToLower() == "authorization"
                             || x.Key.ToLower() == "x-access-token")
@@ -197,13 +195,13 @@ namespace Gambler.Bot.Core.Sites
                 var Resp = JsonSerializer.Deserialize<Payload>(respostring);
                 pdUser user = Resp.data.user;
                 userid = user.id;
-                if(string.IsNullOrWhiteSpace(userid))
+                if (string.IsNullOrWhiteSpace(userid))
                     callLoginFinished(false);
                 else
                 {
-                    foreach(Statistic x in user.statistic)
+                    foreach (Statistic x in user.statistic)
                     {
-                        if(x.currency.ToLower() == CurrentCurrency.ToLower() && x.game == StatGameName)
+                        if (x.currency.ToLower() == CurrentCurrency.ToLower() && x.game == StatGameName)
                         {
                             this.Stats.Bets = (int)x.bets;
                             this.Stats.Wins = (int)x.wins;
@@ -214,9 +212,9 @@ namespace Gambler.Bot.Core.Sites
                             break;
                         }
                     }
-                    foreach(Balance x in user.balances)
+                    foreach (Balance x in user.balances)
                     {
-                        if(x.available.currency.ToLower() == CurrentCurrency.ToLower())
+                        if (x.available.currency.ToLower() == CurrentCurrency.ToLower())
                         {
                             this.Stats.Balance = x.available.amount ?? 0;
                             break;
@@ -226,14 +224,16 @@ namespace Gambler.Bot.Core.Sites
                     callLoginFinished(true);
                     return true;
                 }
-            } catch(WebException e)
+            }
+            catch (WebException e)
             {
                 _logger?.LogError(e.ToString());
-                if(e.Response != null)
+                if (e.Response != null)
                 {
                 }
                 callLoginFinished(false);
-            } catch(Exception e)
+            }
+            catch (Exception e)
             {
                 _logger?.LogError(e.ToString());
                 callLoginFinished(false);
@@ -245,15 +245,16 @@ namespace Gambler.Bot.Core.Sites
         {
             try
             {
-                while(ispd)
+                while (ispd)
                 {
-                    if(userid != null && ((DateTime.Now - lastupdate).TotalSeconds >= 30 || ForceUpdateStats))
+                    if (userid != null && ((DateTime.Now - lastupdate).TotalSeconds >= 30 || ForceUpdateStats))
                     {
                         UpdateStats();
                     }
                     Thread.Sleep(1000);
                 }
-            } catch(Exception e)
+            }
+            catch (Exception e)
             {
                 _logger?.LogError(e.ToString());
             }
@@ -265,6 +266,7 @@ namespace Gambler.Bot.Core.Sites
         public DiceConfig DiceSettings { get; set; }
 
         public LimboConfig LimboSettings { get; set; }
+        public RangeDiceConfig RangeDiceSettings { get; set; }
 
         public async Task<DiceBet> PlaceDiceBet(PlaceDiceBet BetDetails)
         {
@@ -301,15 +303,16 @@ namespace Gambler.Bot.Core.Sites
                     new StringContent(JsonSerializer.Serialize(betresult), Encoding.UTF8, "application/json"));
                 var responsestring = await response.Content.ReadAsStringAsync();
                 Payload ResponsePayload = System.Text.Json.JsonSerializer.Deserialize<Payload>(responsestring);
-                if(ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
+                if (ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
                 {
                     string error = ResponsePayload.errors[0].message;
                     ErrorType errorType = ErrorType.Unknown;
 
-                    if(error == ("Number too small."))
+                    if (error == ("Number too small."))
                     {
                         errorType = ErrorType.InvalidBet;
-                    } else if(error.StartsWith("Maximum bet exceeded"))
+                    }
+                    else if (error.StartsWith("Maximum bet exceeded"))
                     {
                         errorType = ErrorType.InvalidBet;
                     }
@@ -347,12 +350,12 @@ namespace Gambler.Bot.Core.Sites
                     this.Stats.Profit += tmpbet.Profit;
                     this.Stats.Wagered += tmpbet.TotalAmount;
 
-                        /*}
-                    }*/
-                        /*foreach (Balance x in tmp.user.balances)
-                        {
-                            if (x.available.currency.ToLower() == CurrentCurrency.ToLower())
-                            {*/
+                    /*}
+                }*/
+                    /*foreach (Balance x in tmp.user.balances)
+                    {
+                        if (x.available.currency.ToLower() == CurrentCurrency.ToLower())
+                        {*/
                     this.Stats.Balance += tmpbet.Profit;
                     /*break;
                     }
@@ -363,13 +366,15 @@ namespace Gambler.Bot.Core.Sites
                     callBetFinished(tmpbet);
                     retrycount = 0;
                     return tmpbet;
-                } catch(Exception e)
+                }
+                catch (Exception e)
                 {
                     _logger?.LogError(e.ToString());
                     callNotify(
                         "Some kind of error happened. I don't really know graphql, so your guess as to what went wrong is as good as mine.");
                 }
-            } catch(Exception e2)
+            }
+            catch (Exception e2)
             {
                 callNotify("Error occured while trying to bet, retrying in 30 seconds. Probably.");
                 _logger?.LogError(e2.ToString());
@@ -396,29 +401,30 @@ namespace Gambler.Bot.Core.Sites
                 string respostring = await Resp.Content.ReadAsStringAsync();
                 pdUser user = JsonSerializer.Deserialize<Payload>(respostring)?.data.user;
                 //GraphQLResponse< pdUser> Resp = GQLClient.SendMutationAsync< pdUser>(LoginReq).Result;
-                if (user.statistic!=null)
-                foreach(Statistic x in user.statistic)
-                {
-                    if(x.currency.ToLower() == CurrentCurrency.ToLower() && x.game == StatGameName)
+                if (user.statistic != null)
+                    foreach (Statistic x in user.statistic)
                     {
-                        this.Stats.Bets = (int)x.bets;
-                        this.Stats.Wins = (int)x.wins;
-                        this.Stats.Losses = (int)x.losses;
-                        this.Stats.Profit = x.profit ?? 0;
-                        this.Stats.Wagered = x.amount ?? 0;
-                        break;
+                        if (x.currency.ToLower() == CurrentCurrency.ToLower() && x.game == StatGameName)
+                        {
+                            this.Stats.Bets = (int)x.bets;
+                            this.Stats.Wins = (int)x.wins;
+                            this.Stats.Losses = (int)x.losses;
+                            this.Stats.Profit = x.profit ?? 0;
+                            this.Stats.Wagered = x.amount ?? 0;
+                            break;
+                        }
                     }
-                }
-                foreach(Balance x in user.balances)
+                foreach (Balance x in user.balances)
                 {
-                    if(x.available.currency.ToLower() == CurrentCurrency.ToLower())
+                    if (x.available.currency.ToLower() == CurrentCurrency.ToLower())
                     {
                         this.Stats.Balance = x.available.amount ?? 0;
                         break;
                     }
                 }
                 return Stats;
-            } catch(Exception e)
+            }
+            catch (Exception e)
             {
                 _logger?.LogError(e.ToString());
             }
@@ -462,18 +468,20 @@ namespace Gambler.Bot.Core.Sites
                     new StringContent(JsonSerializer.Serialize(betresult), Encoding.UTF8, "application/json"));
                 var responsestring = await response.Content.ReadAsStringAsync();
                 Payload ResponsePayload = System.Text.Json.JsonSerializer.Deserialize<Payload>(responsestring);
-                if(ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
+                if (ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
                 {
                     string error = ResponsePayload.errors[0].message;
                     ErrorType errorType = ErrorType.Unknown;
 
-                    if(error == ("Number too small."))
+                    if (error == ("Number too small."))
                     {
                         errorType = ErrorType.InvalidBet;
-                    } else if(error.StartsWith("Maximum bet exceeded"))
+                    }
+                    else if (error.StartsWith("Maximum bet exceeded"))
                     {
                         errorType = ErrorType.InvalidBet;
-                    } else if(error.StartsWith("You do not have enough balance to do that."))
+                    }
+                    else if (error.StartsWith("You do not have enough balance to do that."))
                     {
                         errorType = ErrorType.BalanceTooLow;
                     }
@@ -519,13 +527,15 @@ namespace Gambler.Bot.Core.Sites
                     callBetFinished(tmpbet);
                     retrycount = 0;
                     return tmpbet;
-                } catch(Exception e)
+                }
+                catch (Exception e)
                 {
                     _logger?.LogError(e.ToString());
                     callNotify(
                         "Some kind of error happened. I don't really know graphql, so your guess as to what went wrong is as good as mine.");
                 }
-            } catch(Exception e2)
+            }
+            catch (Exception e2)
             {
                 callNotify("Error occured while trying to bet, retrying in 30 seconds. Probably.");
                 _logger?.LogError(e2.ToString());
@@ -548,14 +558,15 @@ namespace Gambler.Bot.Core.Sites
                     new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
                 var responsestring = await response.Content.ReadAsStringAsync();
                 Payload ResponsePayload = System.Text.Json.JsonSerializer.Deserialize<Payload>(responsestring);
-                if(ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
+                if (ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
                 {
                     callError("An error occured while trying to bank your funds: ", false, ErrorType.Bank);
                     _logger.LogError(string.Join(Environment.NewLine, ResponsePayload.errors.Select(x => x.ToString())));
                     await UpdateStats();
                     callBankFinished(false, string.Join(Environment.NewLine, ResponsePayload.errors.Select(x => x.ToString())));
                     return false;
-                } else
+                }
+                else
                 {
                     Stats.Balance = ResponsePayload.data.createVaultDeposit.user.balances
                             .FirstOrDefault(x => x.available.currency.ToLower() == CurrentCurrency.ToLower())
@@ -565,7 +576,8 @@ namespace Gambler.Bot.Core.Sites
                     callBankFinished(true, "");
                 }
                 return true;
-            } catch(Exception ex)
+            }
+            catch (Exception ex)
             {
                 callError("An error occured while trying to bank your funds.", false, ErrorType.Bank);
                 _logger?.LogError(ex.ToString());
@@ -604,7 +616,7 @@ namespace Gambler.Bot.Core.Sites
                     return new SeedDetails(ResponsePayload.data.changeClientSeed.seed, ResponsePayload.data.rotateServerSeed.seedHash);
 
                 }
-                
+
             }
             catch (Exception ex)
             {
@@ -617,7 +629,7 @@ namespace Gambler.Bot.Core.Sites
         protected override IGameResult _GetLucky(string ServerSeed, string ClientSeed, int Nonce, Games Game)
         {
             string msg = $"{ClientSeed}:{Nonce}:0";
-            string hex = Hash.HMAC256( msg, ServerSeed).ToLowerInvariant();
+            string hex = Hash.HMAC256(msg, ServerSeed).ToLowerInvariant();
             int charstouse = 2;
             decimal number = 0;
             for (int i = 0; i < 4; i++)
@@ -626,7 +638,7 @@ namespace Gambler.Bot.Core.Sites
                 string s = hex.ToString().Substring(i * charstouse, charstouse);
                 decimal part = ((decimal)int.Parse(s, System.Globalization.NumberStyles.HexNumber)) / (decimal)(Math.Pow(256, i + 1));
                 number += part;
-                
+
             }
             if (Game == Games.Dice)
             {
@@ -636,9 +648,9 @@ namespace Gambler.Bot.Core.Sites
             }
             if (Game == Games.Limbo)
             {
-                
-                decimal floatPoint = 1e8m / (number * 1e8m) * (100-LimboSettings.Edge);
-                decimal crashPoint = Math.Floor(floatPoint ) /100;
+
+                decimal floatPoint = 1e8m / (number * 1e8m) * (100 - LimboSettings.Edge);
+                decimal crashPoint = Math.Floor(floatPoint) / 100;
                 return new LimboResult { Result = Math.Max(crashPoint, 1) };
             }
             return null;
@@ -648,15 +660,15 @@ namespace Gambler.Bot.Core.Sites
         {
             return _BrowserLogin(0);
         }
-        protected  async Task<bool> _BrowserLogin(int retry)
+        protected async Task<bool> _BrowserLogin(int retry)
         {
             try
-            { 
-            var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["session", "__cf_bm"], false, URL);
+            {
+                var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["session", "__cf_bm"], false, URL);
                 string APIKey = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x => x.Name.ToLower() == "session")?.Value;
                 HttpClientHandler handler = new HttpClientHandler
                 {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli | DecompressionMethods.All , 
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli | DecompressionMethods.All,
                     UseCookies = true,
                     CookieContainer = cookies.Cookies,
                 };
@@ -666,7 +678,7 @@ namespace Gambler.Bot.Core.Sites
                 {
                     try
                     {
-                        if (x.Key.ToLower() == "content-type" 
+                        if (x.Key.ToLower() == "content-type"
                             || x.Key.ToLower() == "cookie"
                             || x.Key.ToLower() == "x-operation-name"
                             || x.Key.ToLower() == "x-operation-type")
@@ -678,7 +690,7 @@ namespace Gambler.Bot.Core.Sites
 
                     }
                 }
-                                
+
                 GraphqlRequestPayload LoginReq = new GraphqlRequestPayload
                 {
                     query =
@@ -692,11 +704,11 @@ namespace Gambler.Bot.Core.Sites
                     "application/json");
                 /*x-operation-name: GetFeatureFlagDetails
 x-operation-type: query*/
-                var tmprequest = new HttpRequestMessage { Method = HttpMethod.Post, RequestUri = new Uri(URLInUse + URL), Content = content,  Headers = { { "x-operation-name", "DiceBotLogin" }, { "x-operation-type", "query" } } };
-                
+                var tmprequest = new HttpRequestMessage { Method = HttpMethod.Post, RequestUri = new Uri(URLInUse + URL), Content = content, Headers = { { "x-operation-name", "DiceBotLogin" }, { "x-operation-type", "query" } } };
+
                 var resp = await Client.SendAsync(tmprequest);
-                string respostring = await resp.Content.ReadAsStringAsync();               
-                
+                string respostring = await resp.Content.ReadAsStringAsync();
+
                 if (!resp.IsSuccessStatusCode && retry++ < 5)
                 {
                     await CallCFCaptchaBypass(respostring);
@@ -750,6 +762,114 @@ x-operation-type: query*/
                 callLoginFinished(false);
             }
             return false;
+        }
+
+        public async Task<RangeDiceBet> PlaceRangeDiceBet(PlaceRangeDiceBet BetDetails)
+        {
+            try
+            {
+                string condition = BetDetails.Type switch
+                {
+                    RangeDiceType.Out => "rollOutside",
+                    RangeDiceType.Double => "rollBetweenTwo",
+                    _ => "rollBetween"
+                };
+
+                decimal? target3 = BetDetails.Type == RangeDiceType.Double ? BetDetails.Min2 : (decimal?)null;
+                decimal? target4 = BetDetails.Type == RangeDiceType.Double ? BetDetails.Max2 : (decimal?)null;
+
+                GraphqlRequestPayload betresult = new GraphqlRequestPayload
+                {
+                    operationName = "PrimediceXBet",
+                    query =
+                        "mutation primedicexBet($target1:Float! $target2:Float! $target3:Float $target4:Float $condition:CasinoGamePrimediceConditionEnum! $identifier:String! $amount:Float! $currency:CurrencyEnum!){primedicexBet(target1:$target1 target2:$target2 target3:$target3 target4:$target4 condition:$condition identifier:$identifier amount:$amount currency:$currency)}{id }",
+                    variables = new
+                    {
+                        target1 = BetDetails.Min,
+                        target2 = BetDetails.Max,
+                        target3,
+                        target4,
+                        condition,
+                        identifier = this.Random.RandomString(21),
+                        amount = BetDetails.Amount,
+                        currency = CurrentCurrency.ToLower()
+                    }
+                };
+                /*stakePlaceRangeBet betresult = new stakePlaceRangeBet
+                {
+                    amount = BetDetails.Amount,
+                    condition = condition,
+                    currency = CurrentCurrency.ToLower(),
+                    target1 = BetDetails.Min,
+                    target2 = BetDetails.Max,
+                    target3 = target3,
+                    target4 = target4
+                };*/
+
+                var response = await Client.PostAsync(
+                    URLInUse + "/_api/graphql",
+                    new StringContent(JsonSerializer.Serialize(betresult), Encoding.UTF8, "application/json"));
+
+                var responsestring = await response.Content.ReadAsStringAsync();
+                Payload ResponsePayload = JsonSerializer.Deserialize<Payload>(responsestring);
+
+                if (ResponsePayload.errors != null && ResponsePayload.errors.Length > 0)
+                {
+                    string error = ResponsePayload.errors[0].message;
+                    ErrorType errorType = ErrorType.Unknown;
+
+                    if (error == ("Number too small."))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("Maximum bet exceeded"))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("Amount too small"))
+                    {
+                        errorType = ErrorType.InvalidBet;
+                    }
+                    else if (error.StartsWith("You do not have enough balance to do that."))
+                    {
+                        errorType = ErrorType.BalanceTooLow;
+                    }
+
+                    callError(error, false, errorType);
+                    return null;
+                }
+
+                StakePrimediceXBet tmp = ResponsePayload?.data?.primediceXBet;
+                if (tmp == null)
+                {
+                    callError(responsestring, false, ErrorType.Unknown);
+                    return null;
+                }
+
+                Lastbet = DateTime.Now;
+                lastupdate = DateTime.Now;
+
+                RangeDiceBet tmpbet = tmp.ToBet();
+                tmpbet.IsWin = tmpbet.GetWin(RangeDiceSettings);
+                tmpbet.Guid = BetDetails.GUID;
+
+                this.Stats.Bets++;
+                this.Stats.Wins += tmpbet.IsWin ? 1 : 0;
+                this.Stats.Losses += tmpbet.IsWin ? 0 : 1;
+                this.Stats.Profit += tmpbet.Profit;
+                this.Stats.Wagered += tmpbet.TotalAmount;
+                this.Stats.Balance += tmpbet.Profit;
+
+                callBetFinished(tmpbet);
+                retrycount = 0;
+                return tmpbet;
+            }
+            catch (Exception e)
+            {
+                callNotify("Error occurred while placing range dice bet.");
+                _logger?.LogError(e.ToString());
+            }
+            return null;
         }
 
         public class StakeVaultDepost
@@ -931,10 +1051,10 @@ x-operation-type: query*/
                 };
 
                 //User tmpu = User.FindUser(bet.UserName);
-                    /*if (tmpu == null)
-                        bet.uid = 0;
-                    else
-                        bet.uid = (int)tmpu.Uid;*/
+                /*if (tmpu == null)
+                    bet.uid = 0;
+                else
+                    bet.uid = (int)tmpu.Uid;*/
                 bool win = (((bool)bet.High
                     ? (decimal)bet.Roll > (decimal)99.99 - (decimal)(bet.Chance)
                     : (decimal)bet.Roll < (decimal)(bet.Chance)));
@@ -986,6 +1106,8 @@ x-operation-type: query*/
             public RollDice bet { get; set; }
 
             public StakeLimboBet limboBet { get; set; }
+
+            public StakePrimediceXBet primediceXBet { get; set; }
 
             public StakeVaultDepost createVaultDeposit { get; set; }
             public Rotateserverseed rotateServerSeed { get; set; }
@@ -1044,6 +1166,61 @@ x-operation-type: query*/
             public decimal multiplierTarget { get; set; }
         }
 
+        public class StakePrimediceXState
+        {
+            public decimal result { get; set; }
+            public decimal target1 { get; set; }
+            public decimal target2 { get; set; }
+            public decimal? target3 { get; set; }
+            public decimal? target4 { get; set; }
+            public string condition { get; set; }
+        }
+
+        public class StakePrimediceXBet
+        {
+            public string id { get; set; }
+            public bool active { get; set; }
+            public string currency { get; set; }
+            public decimal amount { get; set; }
+            public decimal payout { get; set; }
+            public decimal payoutMultiplier { get; set; }
+            public decimal amountMultiplier { get; set; }
+            public StakePrimediceXState state { get; set; }
+            public pdUser user { get; set; }
+
+            public RangeDiceBet ToBet()
+            {
+                RangeDiceType type = state.condition switch
+                {
+                    "rollOutside" => RangeDiceType.Out,
+                    "rollBetweenTwo" => RangeDiceType.Double,
+                    _ => RangeDiceType.In
+                };
+
+                RangeDiceBet bet = new RangeDiceBet
+                {
+                    TotalAmount = amount,
+                    Currency = currency,
+                    DateValue = DateTime.Now,
+                    BetID = id,
+                    Roll = state.result,
+                    Type = type,
+                    Min = state.target1,
+                    Max = state.target2,
+                    Min2 = state.target3 ?? 0m,
+                    Max2 = state.target4 ?? 0m
+                };
+                bet.IsWin = payoutMultiplier > 1m;
+                bet.Profit = bet.IsWin ? payout - amount : -amount;
+                return bet;
+            }
+        }
+
+        public class StakePrimediceXResponse
+        {
+            public StakePrimediceXBet primediceXBet { get; set; }
+        }
+
         public class RootObject
         {
             public string type { get; set; }
@@ -1075,6 +1252,20 @@ x-operation-type: query*/
 
             public string __typename { get; set; }
         }
+
+
+        public class stakePlaceRangeBet
+        {
+            public decimal target1 { get; set; }
+            public decimal target2 { get; set; }
+            public decimal? target3 { get; set; }
+            public decimal? target4 { get; set; }
+            public string condition { get; set; }
+            public string identifier { get; set; }
+            public decimal amount { get; set; }
+            public string currency { get; set; }
+        }
+
     }
 }
 

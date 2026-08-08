@@ -2,6 +2,7 @@
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Games.Limbo;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
@@ -16,6 +17,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,7 +28,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Gambler.Bot.Core.Sites
 {
-    public class Bitsler : BaseSite, iDice, iTwist, iLimbo
+    public class Bitsler : BaseSite, iDice, iTwist, iLimbo, iRangeDice
     {
         bool IsBitsler = false;
         string accesstoken = "";
@@ -44,6 +46,7 @@ namespace Gambler.Bot.Core.Sites
         public DiceConfig DiceSettings { get; set; }
         public LimboConfig LimboSettings { get; set; }
         public TwistConfig TwistSettings { get; set; }
+        public RangeDiceConfig RangeDiceSettings { get; set; }
 
         public Bitsler(ILogger logger) : base(logger)
         {
@@ -73,13 +76,14 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = false;
             this.CanVerify = false;
             NonceBased = true;
-            SupportedGames = new Games[] { Games.Dice, Games.Twist, Games.Limbo };
+            SupportedGames = new Games[] { Games.Dice, Games.Twist, Games.Limbo, Games.RangeDice };
             this.CurrentCurrency = "btc";
             this.DiceBetURL = "https://bitvest.io/bet/{0}";
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
             TwistSettings = new TwistConfig() { Edge = 2, MaxRoll = 99m };
             LimboSettings = new LimboConfig() { Edge = 2, MaxPayout = 1000000 };
+            RangeDiceSettings = new RangeDiceConfig { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
         }
 
 
@@ -986,6 +990,118 @@ devise:btc*/
             throw new NotImplementedException();
         }
 
+        public async Task<RangeDiceBet> PlaceRangeDiceBet(PlaceRangeDiceBet BetDetails)
+        {
+            try
+            {
+                BitslerPlaceRangeBet request = new BitslerPlaceRangeBet()
+                {
+                    access_token = accesstoken,
+                    amount = BetDetails.Amount.ToString("0.00000000", NumberFormatInfo.InvariantInfo),
+                    auto = false,
+                    currency = CurrentCurrency,
+                    min = (int)(BetDetails.Min * 100),
+                    max = (int)(BetDetails.Max * 100),
+                    mode = BetDetails.Type.ToString().ToLower(),
+                    name = "ultimatedice",
+                    jp_optin = 0
+
+                };
+                StringContent Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+                HttpResponseMessage tmpmsg = await Client.PostAsync("api/bet-game", Content);
+                string sEmitResponse = await tmpmsg.Content.ReadAsStringAsync();
+
+                BitslerRangeBet bsbase = null;
+                try
+                {
+                    bsbase = JsonSerializer.Deserialize<BitslerRangeBet>(sEmitResponse.Replace("\"return\":", "\"_return\":"));
+                }
+                catch (Exception e)
+                {
+
+                }
+
+                if (bsbase != null)
+                    // if (bsbase._return != null)
+                    if (bsbase.success)
+                    {
+                        Stats.Balance = decimal.Parse(bsbase.new_balance, System.Globalization.NumberFormatInfo.InvariantInfo);
+                        lastupdate = DateTime.Now;
+                        RangeDiceBet tmp = bsbase.ToBet();
+                        tmp.Type = BetDetails.Type;
+                        tmp.Guid = BetDetails.GUID;
+                        tmp.Currency = CurrentCurrency;
+                        Stats.Profit += (decimal)tmp.Profit;
+                        Stats.Wagered += (decimal)tmp.TotalAmount;
+                        tmp.DateValue = DateTime.Now;
+                        bool win = tmp.GetWin(RangeDiceSettings);
+
+                        //set win
+                        if (win)
+                            Stats.Wins++;
+                        else
+                            Stats.Losses++;
+                        Stats.Bets++;
+                        LastBetAmount = (double)BetDetails.Amount;
+                        LastBet = DateTime.Now;
+                        callBetFinished(tmp);
+                        return tmp;
+                    }
+                    else
+                    {
+                        if (bsbase.error != null)
+                        {
+                            _logger.LogDebug(bsbase.error);
+                            ErrorType type = ErrorType.Unknown;
+                            if (bsbase.error == "token_invalid")
+                            {
+                                if (await RefreshToken())
+                                {
+                                    return await PlaceRangeDiceBet(BetDetails);
+                                }
+                                else
+                                {
+                                    type = ErrorType.Other;
+                                }
+                            }
+                            if (bsbase.error.StartsWith("Maximum bet"))
+                            {
+                                type = ErrorType.InvalidBet;
+                            }
+                            else if (bsbase.error == "[amount]: This value should be positive.")
+                            {
+                                type = ErrorType.BetTooLow;
+                            }
+                            else if (bsbase.error.Contains("Bet in progress, please wait few seconds and retry."))
+                            {
+
+                            }
+                            else if (bsbase.error == "amount_balance")
+                                type = ErrorType.BalanceTooLow;
+                            else
+                            {
+
+                            }
+                            callError(bsbase.error, false, type);
+                            return null;
+                        }
+                    }
+                //
+
+            }
+            catch (AggregateException e)
+            {
+                callError("An Unknown error has ocurred.", false, ErrorType.Unknown);
+                callNotify("An Unknown error has ocurred.");
+            }
+            catch (Exception e)
+            {
+                callError("An Unknown error has ocurred.", false, ErrorType.Unknown);
+                callNotify("An Unknown error has ocurred.");
+            }
+            return null;
+        }
+
         public class bsLogin
         {
             public bool success { get; set; }
@@ -994,7 +1110,7 @@ devise:btc*/
             public string error { get; set; }
         }
 
-        public class bsloginbase
+        public class BsLoginBase
         {
             public bsLogin _return { get; set; }
         }
@@ -1106,7 +1222,7 @@ devise:btc*/
 
 
 
-        public class bsBetwithstringid:bsBet
+        public class bsBetwithstringid : bsBet
         {
             public string id { get; set; }
 
@@ -1131,7 +1247,7 @@ devise:btc*/
             public string server_seed { get; set; }
             public string client_seed { get; set; }
             public long nonce { get; set; }
-           
+
             public int timestamp { get; set; }
             public string amount { get; set; }
             public string currency { get; set; }
@@ -1194,7 +1310,7 @@ devise:btc*/
             }
         }
 
-        
+
         public class bsResetSeed
         {
             public string previous_hash { get; set; }
@@ -1208,5 +1324,74 @@ devise:btc*/
             public string error { get; set; }
         }
 
+        public class BitslerPlaceRangeBet
+        {
+            public string name { get; set; }
+            public string amount { get; set; }
+            public string mode { get; set; }
+            public int min { get; set; }
+            public int max { get; set; }
+            public string currency { get; set; }
+            public bool auto { get; set; }
+            public string access_token { get; set; }
+            public int jp_optin { get; set; }
+        }
+
+
+
+        public class BitslerRangeBet
+        {
+            public string error { get; set; }
+            public bool success { get; set; }
+            public BSGame game { get; set; }
+            public long id { get; set; }
+            public long timestamp { get; set; }
+            public string amount { get; set; }
+            public string currency { get; set; }
+            public decimal payout { get; set; }
+            public string profit { get; set; }
+            public decimal xp { get; set; }
+            public decimal xp_add { get; set; }
+            public string username { get; set; }
+            public string new_balance { get; set; }
+            public string wager { get; set; }
+            public string win { get; set; }
+            public RangeDiceBet ToBet()
+            {
+                return new RangeDiceBet()
+                {
+                    BetID = id.ToString(),
+                    Currency = currency,
+                    Date = timestamp,
+                    Profit = decimal.Parse(profit, NumberFormatInfo.InvariantInfo),
+                    Roll = game.result / 100m,
+                    TotalAmount = decimal.Parse(amount, NumberFormatInfo.InvariantInfo),
+                    Min = game.range.min/100m,
+                    Max = game.range.max/100m,
+                     IsWin = game.win,
+                      
+
+                };
+            }
+        }
+
+        public class BSGame
+        {
+            public int result { get; set; }
+            public string mode { get; set; }
+            public Range range { get; set; }
+            public bool win { get; set; }
+            public string chance { get; set; }
+            public string target_payout { get; set; }
+        }
+
+        public class Range
+        {
+            public int min { get; set; }
+            public int max { get; set; }
+        }
+
+
     }
+
 }

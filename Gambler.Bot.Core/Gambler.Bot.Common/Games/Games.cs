@@ -2,6 +2,6 @@
 {
     public enum Games
     {
-        Dice, Crash, Roulette, Plinko, Limbo, Twist, Boom, HiLo
+        Dice, Crash, Roulette, Plinko, Limbo, Twist, Boom, HiLo, RangeDice
     }
 }

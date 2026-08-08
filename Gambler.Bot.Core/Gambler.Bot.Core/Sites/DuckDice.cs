@@ -1,6 +1,7 @@
 ﻿using Gambler.Bot.Common.Enums;
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -23,7 +24,7 @@ using static Gambler.Bot.Core.Sites.NitrogenSports;
 
 namespace Gambler.Bot.Core.Sites
 {
-    public class DuckDice : BaseSite, iDice
+    public class DuckDice : BaseSite, iDice, iRangeDice
     {
         string accesstoken = "";
         DateTime LastSeedReset = new DateTime();
@@ -33,7 +34,7 @@ namespace Gambler.Bot.Core.Sites
         DateTime lastupdate = new DateTime();
         HttpClient Client;
         HttpClientHandler ClientHandlr;//
-        public static string[] cCurrencies = new string[] { "USDT", "BTC", "LTC", "TRX", "DECOY", "DOGE", "XRP", "ETH", "XLM", 
+        public static string[] cCurrencies = new string[] { "USDT", "BTC", "LTC", "TRX", "DECOY", "DOGE", "XRP", "ETH", "XLM",
             "BCH","BNB","SHIB","USDC","ADA","DASH","SOL","ATOM","ETC","EOS","XMR","BTTC","POL","ZEC","DOT","RVN","LINK","DAI",
             "TUSD","AVAX","NEAR","ZEN","AAVE","ENA","UNI","TON","FDUSD","TRUMP","WBTC","INR","PKR","USD","VND","GHS","KZT","BDT",
         "KGS","CAD","UZS","AZN","CLP","IDR","KES","MXN","MYR","NGN","THB"};
@@ -41,6 +42,7 @@ namespace Gambler.Bot.Core.Sites
         QuackSeed currentseed = null;
 
         public DiceConfig DiceSettings { get; set; }
+        public RangeDiceConfig RangeDiceSettings { get; set; }
 
         public DuckDice(ILogger logger) : base(logger)
         {
@@ -67,11 +69,12 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = false;
             this.CanVerify = true;
             this.Currencies = cCurrencies;
-            SupportedGames = new Games[] { Games.Dice };
-            CurrentCurrency ="btc";
+            SupportedGames = new Games[] { Games.Dice, Games.RangeDice };
+            CurrentCurrency = "btc";
             this.DiceBetURL = "https://duckdice.io/Bets/{0}";
             //this.Edge = 1m;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
+            RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
             NonceBased = true;
             SupportsBrowserLogin = true;
         }
@@ -104,31 +107,31 @@ namespace Gambler.Bot.Core.Sites
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
-        {            
+        {
             try
             {
-                accesstoken = LoginParams[0].Value;        
-               
+                accesstoken = LoginParams[0].Value;
+
 
                 var handler = new SocketsHttpHandler
                 {
                     SslOptions = new SslClientAuthenticationOptions
                     {
-                        EnabledSslProtocols = SslProtocols.Tls12|SslProtocols.Tls13,
-                        
-                    }, 
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+
+                    },
                     UseCookies = true,
-                     AllowAutoRedirect=true,
-                      
+                    AllowAutoRedirect = true,
+
 
                 };
 
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["__cf_bm"]);
                 var authcookie = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x => x.Name == "_at");
-                if (authcookie!=null)
+                if (authcookie != null)
                 {
                     authcookie.Expired = true;
-                }    
+                }
                 //handler = new HttpClientHandler
                 //{
                 //    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
@@ -136,12 +139,12 @@ namespace Gambler.Bot.Core.Sites
                 //    CookieContainer = cookies.Cookies,
 
                 //};
-                Client = new HttpClient(handler) { BaseAddress = new Uri(URLInUse+"/api/") }; ;
+                Client = new HttpClient(handler) { BaseAddress = new Uri(URLInUse + "/api/") }; ;
                 foreach (var x in cookies.Headers)
                 {
                     try
                     {
-                        if (x.Key.ToLower() == "content-type" 
+                        if (x.Key.ToLower() == "content-type"
                             || x.Key.ToLower() == "cookie"
                             || x.Key.ToLower() == "authorization"
                             )
@@ -153,22 +156,22 @@ namespace Gambler.Bot.Core.Sites
 
                     }
                 }
-                
-                var EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
+
+                var EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                 var sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 int retriees = 0;
                 while (!EmitResponse.IsSuccessStatusCode && retriees++ < 5)
                 {
                     await CallCFCaptchaBypass(sEmitResponse);
                     await Task.Delay(Random.Next(50, 150) * retriees);
-                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
+                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 }
-                
+
                 if (EmitResponse.IsSuccessStatusCode)
                 {
                     Quackbalance balance = JsonSerializer.Deserialize<Quackbalance>(sEmitResponse);
-                    sEmitResponse = await Client.GetStringAsync("bot/stats/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
+                    sEmitResponse = await Client.GetStringAsync("bot/stats/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
                     /*sEmitResponse = await Client.GetStringAsync("randomize" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
                     currentseed = JsonSerializer.Deserialize<QuackSeed>(sEmitResponse).current;*/
@@ -202,7 +205,7 @@ namespace Gambler.Bot.Core.Sites
                     string url = $"{URLInUse}/api/load/{CurrentCurrency}?api_key={accesstoken}";
                     string result = await ExecJS($"let response = await fetch(\"{url}\");let data = await response.json();return data;");
 
-                    string response =await EmitResponse.Content.ReadAsStringAsync();
+                    string response = await EmitResponse.Content.ReadAsStringAsync();
                     callLoginFinished(false);
                     return false;
                 }
@@ -220,7 +223,7 @@ namespace Gambler.Bot.Core.Sites
         {
             try
             {
-                var cookies = await CallBypassRequired(URLInUse+"/dice" + AffiliateCode, ["_at", "__cf_bm"], false, "/api/load/bets");
+                var cookies = await CallBypassRequired(URLInUse + "/dice" + AffiliateCode, ["_at", "__cf_bm"], false, "/api/load/bets");
                 //accesstoken = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x=>x.Name=="_at")?.Value;
                 HttpClientHandler handler = new HttpClientHandler
                 {
@@ -229,7 +232,7 @@ namespace Gambler.Bot.Core.Sites
                     CookieContainer = cookies.Cookies
                 };
                 Client = new HttpClient(handler) { BaseAddress = new Uri(URLInUse + "/api/") }; ;
-                    
+
                 foreach (var x in cookies.Headers)
                 {
                     try
@@ -262,16 +265,16 @@ namespace Gambler.Bot.Core.Sites
                 {
                     await CallCFCaptchaBypass(sEmitResponse);
                     await Task.Delay(Random.Next(50, 150) * retriees);
-                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency );
+                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency);
                     sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 }
 
                 if (EmitResponse.IsSuccessStatusCode)
                 {
                     Quackbalance balance = JsonSerializer.Deserialize<Quackbalance>(sEmitResponse);
-                    sEmitResponse = await Client.GetStringAsync("stat/" + CurrentCurrency );
+                    sEmitResponse = await Client.GetStringAsync("stat/" + CurrentCurrency);
                     QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
-                    sEmitResponse = await Client.GetStringAsync("randomize" );
+                    sEmitResponse = await Client.GetStringAsync("randomize");
                     currentseed = JsonSerializer.Deserialize<QuackSeed>(sEmitResponse).current;
                     if (balance != null && _Stats != null)
                     {
@@ -329,7 +332,7 @@ namespace Gambler.Bot.Core.Sites
             try
             {
 
-                string sEmitResponse = await Client.GetStringAsync("load/" + CurrentCurrency +  (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
+                string sEmitResponse = await Client.GetStringAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                 Quackbalance balance = JsonSerializer.Deserialize<Quackbalance>(sEmitResponse);
                 if (this.SelectedGameMode == "Normal")
                 {
@@ -341,7 +344,7 @@ namespace Gambler.Bot.Core.Sites
                     Stats.Balance = decimal.Parse(balance.user.balances.faucet, System.Globalization.NumberFormatInfo.InvariantInfo);
 
                 }
-                sEmitResponse = await Client.GetStringAsync("stat/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
+                sEmitResponse = await Client.GetStringAsync("stat/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                 QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
                 Stats.Profit = decimal.Parse(_Stats.profit, System.Globalization.NumberFormatInfo.InvariantInfo);
                 Stats.Wagered = decimal.Parse(_Stats.volume, System.Globalization.NumberFormatInfo.InvariantInfo);
@@ -363,13 +366,13 @@ namespace Gambler.Bot.Core.Sites
             decimal amount = BetDetails.Amount;
             decimal chance = BetDetails.Chance;
             bool High = BetDetails.High;
-            StringContent Content = new StringContent(string.Format(System.Globalization.NumberFormatInfo.InvariantInfo, "{{\"amount\":\"{0:0.00000000}\",\"symbol\":\"{1}\",\"chance\":{2:0.00},\"isHigh\":{3},\"faucet\":{4}}}", amount, CurrentCurrency, chance, High ? "true" : "false", (SelectedGameMode=="Faucet").ToString().ToLower()), Encoding.UTF8, "application/json");
+            StringContent Content = new StringContent(string.Format(System.Globalization.NumberFormatInfo.InvariantInfo, "{{\"amount\":\"{0:0.00000000}\",\"symbol\":\"{1}\",\"chance\":{2:0.00},\"isHigh\":{3},\"faucet\":{4}}}", amount, CurrentCurrency, chance, High ? "true" : "false", (SelectedGameMode == "Faucet").ToString().ToLower()), Encoding.UTF8, "application/json");
             try
             {
-                var response = await Client.PostAsync("play" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken), Content);
+                var response = await Client.PostAsync("play" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
                 string sEmitResponse = await response.Content.ReadAsStringAsync();
                 QuackBet newbet = JsonSerializer.Deserialize<QuackBet>(sEmitResponse);
-                if (newbet.error != null || newbet.errors!=null)
+                if (newbet.error != null || newbet.errors != null)
                 {
                     ErrorType type = ErrorType.Unknown;
                     string msg = newbet.error;
@@ -390,7 +393,7 @@ namespace Gambler.Bot.Core.Sites
 
                         }
                     }
-                    
+
                     callError(msg, false, type);
                     return null;
                 }
@@ -433,9 +436,9 @@ namespace Gambler.Bot.Core.Sites
             {
                 var seed = GenerateNewClientSeed();
                 StringContent Content = new StringContent(string.Format(System.Globalization.NumberFormatInfo.InvariantInfo, "{{\"clientSeed\":\"{0}\"}}", seed), Encoding.UTF8, "application/json");
-                var response = await Client.PostAsync("randomize" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken), Content);
-                    string sresponse = await response.Content.ReadAsStringAsync();
-                var responseseed  = JsonSerializer.Deserialize<QuackSeed>(sresponse);
+                var response = await Client.PostAsync("randomize" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
+                string sresponse = await response.Content.ReadAsStringAsync();
+                var responseseed = JsonSerializer.Deserialize<QuackSeed>(sresponse);
                 currentseed = responseseed.current;
                 return new SeedDetails
                 {
@@ -443,7 +446,7 @@ namespace Gambler.Bot.Core.Sites
                     ServerHash = currentseed.serverSeedHash,
                     ClientSeed = seed
                 };
-                
+
             }
             catch (Exception e)
             {
@@ -458,7 +461,7 @@ namespace Gambler.Bot.Core.Sites
             StringContent Content = new StringContent(JsonSerializer.Serialize(bnk), Encoding.UTF8, "application/json");
             try
             {
-                var response = await Client.PostAsync("bank/deposit" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken), Content);
+                var response = await Client.PostAsync("bank/deposit" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
                 string sEmitResponse = await response.Content.ReadAsStringAsync();
                 if (response.IsSuccessStatusCode)
                 {
@@ -470,13 +473,13 @@ namespace Gambler.Bot.Core.Sites
                 }
                 else
                 {
-                    callError(sEmitResponse,false, ErrorType.Bank);
+                    callError(sEmitResponse, false, ErrorType.Bank);
                     callBankFinished(false, "");
                     return false;
                 }
-                
+
             }
-            catch (Exception e) 
+            catch (Exception e)
             {
                 _logger.LogError(e.ToString());
                 callError("Failed to bank funds.", false, ErrorType.Bank);
@@ -497,22 +500,100 @@ namespace Gambler.Bot.Core.Sites
                 if (lucky < 1000000)
                 {
                     decimal tmp = (lucky % 10000) / 100m;
-                    return new DiceResult { Roll = tmp }; 
+                    return new DiceResult { Roll = tmp };
                 }
             }
             return null;
         }
 
-        
+        public async Task<RangeDiceBet> PlaceRangeDiceBet(PlaceRangeDiceBet BetDetails)
+        {
+            decimal amount = BetDetails.Amount;
+
+            duckPlaceRangeBet placebet = new duckPlaceRangeBet { amount = BetDetails.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo), isIn = BetDetails.Type == RangeDiceType.In, symbol = CurrentCurrency, };
+            placebet.range = new int[] { (int)(BetDetails.Min * 100), (int)(BetDetails.Max * 100) };
+            StringContent Content = new StringContent(JsonSerializer.Serialize(placebet), Encoding.UTF8, "application/json");
+            try
+            {
+                var response = await Client.PostAsync("range-dice/play" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
+                string sEmitResponse = await response.Content.ReadAsStringAsync();
+                QuakRangeBetResponse newbet = JsonSerializer.Deserialize<QuakRangeBetResponse>(sEmitResponse);
+                if (newbet.error != null || newbet.errors != null)
+                {
+                    ErrorType type = ErrorType.Unknown;
+                    string msg = newbet.error;
+
+                    if (newbet.error != null)
+                    {
+                        if (newbet.error == "You have insufficient balance.")
+                            type = ErrorType.BalanceTooLow;
+                        else if (newbet.error.StartsWith("The minimum bet is"))
+                            type = ErrorType.BetTooLow;
+                    }
+                    else
+                    {
+                        if (newbet.errors?.chance?.FirstOrDefault(x => x.StartsWith("The chance may not be greater than")) != null)
+                        {
+                            type = ErrorType.InvalidBet;
+                            msg = newbet.errors.chance.FirstOrDefault();
+
+                        }
+                    }
+
+                    callError(msg, false, type);
+                    return null;
+                }
+                var range = newbet.bet.choiceOption.Split(",");
+                RangeDiceBet tmp = new RangeDiceBet
+                {
+                    TotalAmount = decimal.Parse(newbet.bet.betAmount, System.Globalization.NumberFormatInfo.InvariantInfo),
+                    //Chance = newbet.bet.chance,
+                    //ClientSeed = currentseed.clientSeed,
+                     Date = newbet.bet.createdAt,
+                      Edge = RangeDiceSettings.Edge, 
+                       Min = int.Parse(range[0])/100m,
+                       Max = int.Parse(range[1]) / 100m,
+                        Nonce = newbet.bet.nonce,
+                          Type = BetDetails.Type,
+                           
+                    Currency = CurrentCurrency,
+                    DateValue = DateTime.Now,
+                    //High = High,
+                    //Nonce = currentseed.nonce++,
+                    Profit = decimal.Parse(newbet.bet.profit, System.Globalization.NumberFormatInfo.InvariantInfo),
+                    Roll = newbet.bet.number / 100m,
+                    //ServerHash = currentseed.serverSeedHash,
+                    BetID = newbet.bet.hash,
+                    Guid = BetDetails.GUID
+                };
+                tmp.IsWin = tmp.GetWin(RangeDiceSettings);
+                lastupdate = DateTime.Now;
+                Stats.Profit = decimal.Parse(newbet.user.profit, System.Globalization.NumberFormatInfo.InvariantInfo);
+                Stats.Wagered = decimal.Parse(newbet.user.volume, System.Globalization.NumberFormatInfo.InvariantInfo);
+                Stats.Balance = decimal.Parse(newbet.user.balance, System.Globalization.NumberFormatInfo.InvariantInfo);
+                Stats.Wins = newbet.user.wins;
+                Stats.Bets = newbet.user.bets;
+                Stats.Losses = newbet.user.bets - newbet.user.wins;
+                callBetFinished(tmp);
+                return tmp;
+            }
+            catch (Exception e)
+            {
+                callError("There was an error placing your bet.", false, ErrorType.Unknown);
+                _logger?.LogError(e.ToString());
+            }
+            return null;
+        }
+
         public class QuackLogin
         {
             public string token { get; set; }
         }
-        
+
         public class QuackErrors
         {
             public string[] chance { get; set; }
-            
+
         }
         public class QuackStats
         {
@@ -526,6 +607,7 @@ namespace Gambler.Bot.Core.Sites
             public int wins { get; set; }
             public string volume { get; set; }
             public string profit { get; set; }
+            public Absolutelevel absoluteLevel { get; set; }
 
         }
         public class QuackStatsDetails
@@ -587,8 +669,8 @@ namespace Gambler.Bot.Core.Sites
         {
             public string main { get; set; }
             public string faucet { get; set; }
-        }      
-    public class QuackBank
+        }
+        public class QuackBank
         {
             public decimal amount { get; set; }
             public string symbol { get; set; }
@@ -600,6 +682,73 @@ namespace Gambler.Bot.Core.Sites
             public string balance { get; set; }
             public string bankBalance { get; set; }
         }
+
+        public class duckPlaceRangeBet
+        {
+            public string amount { get; set; }
+            public string symbol { get; set; }
+            public bool isIn { get; set; }
+            public int[] range { get; set; }
+            public object tleHash { get; set; }
+            public object userWageringBonusHash { get; set; }
+        }
+
+
+        public class QuakRangeBetResponse
+        {
+
+            public string error { get; set; }
+            public QuackErrors errors { get; set; }
+            public QuakRangeBet bet { get; set; }
+            public bool isJackpot { get; set; }
+            public object jackpotStatus { get; set; }
+            public object jackpot { get; set; }
+            public QuackStats user { get; set; }
+            public object context { get; set; }
+        }
+
+        public class QuakRangeBet
+        {
+            public string hash { get; set; }
+            public string symbol { get; set; }
+            public int nonce { get; set; }
+            public bool result { get; set; }
+            public string choice { get; set; }
+            public string choiceOption { get; set; }
+            public decimal number { get; set; }
+            public decimal chance { get; set; }
+            public decimal payout { get; set; }
+            public string betAmount { get; set; }
+            public string winAmount { get; set; }
+            public string profit { get; set; }
+            public int created { get; set; }
+            public string gameMode { get; set; }
+            public object tle { get; set; }
+            public object mined { get; set; }
+            public Game game { get; set; }
+            public decimal createdAt { get; set; }
+            public bool isJackpot { get; set; }
+            public QuackStats user { get; set; }
+        }
+
+        public class Game
+        {
+            public string name { get; set; }
+            public string slug { get; set; }
+        }
+
+        
+
+        public class Absolutelevel
+        {
+            public decimal level { get; set; }
+            public decimal xp { get; set; }
+            public decimal xpNext { get; set; }
+            public decimal xpPrev { get; set; }
+            public string levelRank { get; set; }
+        }
+
+
 
     }
 }
