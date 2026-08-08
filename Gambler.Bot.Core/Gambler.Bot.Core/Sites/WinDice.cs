@@ -1,6 +1,7 @@
 ﻿using Gambler.Bot.Common.Enums;
 using Gambler.Bot.Common.Games;
 using Gambler.Bot.Common.Games.Dice;
+using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
@@ -19,7 +20,7 @@ using static Gambler.Bot.Core.Sites.Bitvest;
 
 namespace Gambler.Bot.Core.Sites
 {
-    public class WinDice : BaseSite, iDice
+    public class WinDice : BaseSite, iDice, iRangeDice
     {
         string accesstoken = "";
         DateTime LastSeedReset = new DateTime();
@@ -33,6 +34,7 @@ namespace Gambler.Bot.Core.Sites
         WDGetSeed currentseed;
 
         public DiceConfig DiceSettings { get; set; }
+        public RangeDiceConfig RangeDiceSettings { get; set; }
 
         public WinDice(ILogger logger) : base(logger)
         {
@@ -56,11 +58,12 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = false;
             this.CanVerify = false;
             this.Currencies = new string[] { "USDT","BTC","ETH","TRX","LTC","DOGE","BCH","XRP","BNB","WIN","TON" };
-            SupportedGames = new Games[] { Games.Dice };
+            SupportedGames = new Games[] { Games.Dice, Games.RangeDice };
             CurrentCurrency ="btc";
             this.DiceBetURL = "https://windice.io/api/v1/api/getBet?hash={0}";
             //this.Edge = 1;
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
+            RangeDiceSettings = new RangeDiceConfig { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
             NonceBased = true;
         }
 
@@ -424,6 +427,102 @@ namespace Gambler.Bot.Core.Sites
         protected override Task<bool> _BrowserLogin()
         {
             throw new NotImplementedException();
+        }
+
+        public async Task<RangeDiceBet> PlaceRangeDiceBet(PlaceRangeDiceBet BetDetails)
+        {
+            _logger.LogDebug("WinDice placing dice bet");
+           
+            string loginjson = JsonSerializer.Serialize<WDPlaceBet>(new WDPlaceBet()
+            {
+                curr = CurrentCurrency.ToLower(),
+                bet = BetDetails.Amount,
+                game = BetDetails.Type.ToString().ToLower(),
+                high =(int)(BetDetails.Max*100),
+                low = (int)(BetDetails.Min*100),
+                 
+            });
+
+            HttpContent cont = new StringContent(loginjson);
+            cont.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            HttpResponseMessage resp2 = await Client.PostAsync("roll", cont);
+
+            if (resp2.IsSuccessStatusCode)
+            {
+                string response = await resp2.Content.ReadAsStringAsync();
+                _logger.LogDebug("WinDice bet result:" + response);
+                WDBaseResponse statusMessage = JsonSerializer.Deserialize<WDBaseResponse>(response);
+                if (statusMessage.status == "error")
+                {
+                    ErrorType type = ErrorType.Unknown;
+                    switch (statusMessage.message)
+                    {
+                        case "Minimal chance for non-deposit bets is 0.2%":
+
+                        case "Chance min 0.010000 / max 98.000000":
+
+                            type = ErrorType.InvalidBet;
+                            break;
+                        case "No balance":
+
+                            type = ErrorType.BalanceTooLow;
+
+                            break;
+
+                        default:
+                            type = ErrorType.Unknown;
+                            break;
+                    }
+                    if (type == ErrorType.Unknown)
+                    {
+                        if (statusMessage.message.StartsWith("Maximum win "))
+                            type = ErrorType.InvalidBet;
+                        if (statusMessage.message.StartsWith("Minimum bet "))
+                            type = ErrorType.BetTooLow;
+
+                    }
+                    callError(statusMessage.message, false, type);
+                    return null;
+                }
+                WDBet tmpBalance = JsonSerializer.Deserialize<WDBet>(response);
+                if (tmpBalance.status == "success")
+                {
+                    RangeDiceBet Result = new RangeDiceBet()
+                    {
+                        TotalAmount = BetDetails.Amount,
+                        DateValue = DateTime.Now,
+                        ClientSeed = currentseed.client,
+                        Currency = CurrentCurrency,
+                        Guid = BetDetails.GUID,
+                        BetID = tmpBalance.data.hash,
+                        Nonce = tmpBalance.data.nonce,
+                        Profit = tmpBalance.data.win - tmpBalance.data.bet,
+                        Roll = tmpBalance.data.result / 100m,
+                        ServerHash = currentseed.hash,
+                        Type = BetDetails.Type,
+                         Min = tmpBalance.data.pointLow/100m,
+                          Max = tmpBalance.data.pointHigh/100m,
+                            
+                    };
+                    Stats.Bets++;
+                    Result.IsWin  = Result.GetWin(RangeDiceSettings);
+                    if (Result.IsWin)
+                        Stats.Wins++;
+                    else 
+                        Stats.Losses++;
+                    Stats.Wagered += BetDetails.Amount;
+                    Stats.Profit += Result.Profit;
+                    Stats.Balance += Result.Profit;
+                    callBetFinished(Result);
+                    return Result;
+                }
+                else
+                {
+                    callNotify(tmpBalance.message);
+                    callError(tmpBalance.message, false, ErrorType.Unknown);
+                }
+            }
+            return null;
         }
 
         public class WDCurrencyBalance
