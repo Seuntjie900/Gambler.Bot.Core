@@ -61,7 +61,7 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = true;
             this.CanVerify = true;
             this.Currencies = new string[] { "btc", "tok", "ltc", "eth", "doge", "bch" };
-
+            CurrencyMap.Add("btc", "bitcoins");
             CurrencyMap.Add("tok", "tokens");
             CurrencyMap.Add("ltc", "litecoins");
             CurrencyMap.Add("eth", "ethers");
@@ -253,7 +253,7 @@ namespace Gambler.Bot.Core.Sites
                 decimal tmpchance = High ? DiceSettings.MaxRoll - chance + 0.0001m : chance - 0.0001m;
                 List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
 
-                pairs.Add(new KeyValuePair<string, string>("bet", (amount).ToString(System.Globalization.NumberFormatInfo.InvariantInfo)));
+                pairs.Add(new KeyValuePair<string, string>("bet", (amount).ToString("0.00000000",System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("target", tmpchance.ToString("0.0000", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("side", High ? "high" : "low"));
                 pairs.Add(new KeyValuePair<string, string>("act", "play_dice"));
@@ -463,7 +463,7 @@ namespace Gambler.Bot.Core.Sites
 
                 Thread.Sleep(500);
                 List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
-                pairs.Add(new KeyValuePair<string, string>("quantity", (Amount).ToString("", System.Globalization.NumberFormatInfo.InvariantInfo)));
+                pairs.Add(new KeyValuePair<string, string>("quantity", (Amount).ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("address", Address));
                 pairs.Add(new KeyValuePair<string, string>("act", "withdraw"));
                 pairs.Add(new KeyValuePair<string, string>("c", "99999999"));
@@ -827,7 +827,7 @@ namespace Gambler.Bot.Core.Sites
 
         public class Chat
         {
-            public string max_id { get; set; }
+            public long max_id { get; set; }
             public object msg { get; set; }
             public object delete { get; set; }
         }
@@ -965,7 +965,7 @@ namespace Gambler.Bot.Core.Sites
             public string balance_dogecoin { get; set; }
             public string balance_bcash { get; set; }
             public string self_username { get; set; }
-            public string self_user_id { get; set; }
+            public long self_user_id { get; set; }
 
 
         }
