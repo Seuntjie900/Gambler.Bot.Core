@@ -7,6 +7,7 @@ using Gambler.Bot.Common.Games.Twist;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -38,10 +39,8 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;
         public static string[] sCurrencies = new string[] { "ada", "arb", "avax", "bch", "bnb", "brl", "btc", "btg", "btslr", "busd", "dai", "dash", "dgb", "doge", "eos", "etc", "eth", "ethw", "fdusd","link"
-        ,"ltc","matic","neo","op","pol","qtum","shib","sol","ton","trx","usdc","usdt","xlm","xrp","zec"};
-        HttpClientHandler ClientHandlr;
+         ,"ltc","matic","neo","op","pol","qtum","shib","sol","ton","trx","usdc","usdt","xlm","xrp","zec"};
 
         public DiceConfig DiceSettings { get; set; }
         public LimboConfig LimboSettings { get; set; }
@@ -344,11 +343,7 @@ devise:btc*/
                 if (x.Param.Name.ToLower() == "api key")
                     APIKey = x.Value?.Trim();
             }
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri(URLInUse) };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            Client.DefaultRequestHeaders.Add("User-Agent", "DiceBot");
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse), UserAgent = "DiceBot" });
 
             try
             {
@@ -609,8 +604,6 @@ devise:btc*/
         protected override void _Disconnect()
         {
             this.IsBitsler = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         public override void SetProxy(ProxyDetails ProxyInfo)

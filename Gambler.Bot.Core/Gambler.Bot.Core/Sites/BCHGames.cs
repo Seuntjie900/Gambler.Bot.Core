@@ -5,6 +5,7 @@ using Gambler.Bot.Common.Games.Limbo;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
@@ -17,13 +18,12 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using WebSocket4Net;
 
 namespace Gambler.Bot.Core.Sites
 {
     public class BCHGames : BaseSite, iDice, iLimbo, iCrash
     {
-        WebSocket Sock;
+        ISiteSocket Sock;
         public DiceConfig DiceSettings { get; set; }
         public LimboConfig LimboSettings { get; set; }
         public CrashConfig CrashSettings { get; set; }
@@ -129,8 +129,9 @@ namespace Gambler.Bot.Core.Sites
                     List<KeyValuePair<string, string>> wscookies = new List<KeyValuePair<string, string>>();
                     wscookies.Add(new KeyValuePair<string, string>("cf_clearance", cfuid));
 
+                    Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + AffiliateCode), Cookies = cookies.Cookies, Headers = cookies.Headers, UserAgent = cookies.UserAgent });
                     await OpenSocket(wscookies, cookies.Headers.ToList(), cookies.UserAgent);
-                    if (Sock.State == WebSocketState.Open)
+                    if (Sock.State == SiteSocketState.Open)
                     {
 
                     }
@@ -173,14 +174,15 @@ namespace Gambler.Bot.Core.Sites
 
         async Task OpenSocket(List<KeyValuePair<string,string>> wscookies, List<KeyValuePair<string, string>> headers, string UserAgent)
         {
-            Sock = new WebSocket($"{URLInUse.Replace("https", "wss")}/api/graphql",
-                   null,
-                   wscookies,
-                   headers,
-                   UserAgent,
-                   $"{URLInUse}"/*,
-                    WebSocketVersion.None*/);
-            Sock.Opened += Sock_Opened; ;
+            Sock = Client.CreateSocket(new SiteSocketOptions
+            {
+                Url = new Uri($"{URLInUse.Replace("https", "wss")}/api/graphql"),
+                Cookies = wscookies,
+                Headers = headers,
+                UserAgent = UserAgent,
+                Origin = $"{URLInUse}"
+            });
+            Sock.Opened += Sock_Opened;
             Sock.Error += Sock_Error;
             Sock.MessageReceived += Sock_MessageReceived;
             Sock.Closed += Sock_Closed;
@@ -188,7 +190,7 @@ namespace Gambler.Bot.Core.Sites
             Sock.Open();
             await Task.Run(() =>
             {
-                while (Sock.State == WebSocketState.Connecting)
+                while (Sock.State == SiteSocketState.Connecting)
                 {
                     Thread.Sleep(300);
                     //Response = Client.GetStringAsync("https://gs.ethercrash.io/socket.io/?EIO=3&sid=" + io + "&transport=polling&t=" + json.CurrentDate()).Result;
@@ -203,12 +205,12 @@ namespace Gambler.Bot.Core.Sites
             _logger.LogDebug("closed");
         }
 
-        private void Sock_MessageReceived(object sender, MessageReceivedEventArgs e)
+        private void Sock_MessageReceived(object sender, SiteSocketMessageEventArgs e)
         {
             _logger.LogInformation(e.Message);
         }
 
-        private void Sock_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
+        private void Sock_Error(object sender, SiteSocketErrorEventArgs e)
         {
             _logger.LogError(e.Exception.ToString());
         }

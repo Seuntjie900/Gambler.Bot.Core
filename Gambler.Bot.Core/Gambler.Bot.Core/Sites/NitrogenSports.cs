@@ -12,8 +12,8 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
-using WebSocket4Net;
 
 namespace Gambler.Bot.Core.Sites
 {
@@ -28,11 +28,9 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;// = new HttpClient { BaseAddress = new Uri("https://api.primedice.com/api/") };
-        HttpClientHandler ClientHandlr;
         string token = "";
         string link = "";
-        WebSocket NSSocket = null;
+        ISiteSocket NSSocket = null;
 
         public DiceConfig DiceSettings { get; set; }
 
@@ -102,8 +100,16 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             iskd = false;
-            Client = null;
-            ClientHandlr = null;
+            if (NSSocket != null)
+            {
+                try
+                {
+                    NSSocket.Close();
+                }
+                catch { }
+                NSSocket.Dispose();
+                NSSocket = null;
+            }
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
@@ -121,11 +127,11 @@ namespace Gambler.Bot.Core.Sites
                     otp = x.Value;
             }
             
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri("https://nitrogensports.eu/") };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            Client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:43.0) Gecko/20100101 Firefox/43.0");
+            Client = await CreateClientAsync(new SiteClientOptions
+            {
+                BaseAddress = new Uri("https://nitrogensports.eu/"),
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:43.0) Gecko/20100101 Firefox/43.0"
+            });
 
 
             try
@@ -172,12 +178,12 @@ namespace Gambler.Bot.Core.Sites
                 {
                     Stats.Balance = decimal.Parse(tmpLogin.balance, System.Globalization.NumberFormatInfo.InvariantInfo);
                     token = tmpLogin.csrf_token;
-                    ConnectSocket();
+                    await ConnectSocket();
                     Stats.Balance = decimal.Parse(tmpLogin.balance, System.Globalization.NumberFormatInfo.InvariantInfo);
 
                     await UpdateStats();
                     this.password = Password;
-                    return NSSocket.State == WebSocketState.Open;
+                    return NSSocket.State == SiteSocketState.Open;
                 }
 
             }
@@ -192,7 +198,7 @@ namespace Gambler.Bot.Core.Sites
             callLoginFinished(false);
             return false;
         }
-        void ConnectSocket()
+        async Task ConnectSocket()
         {
             try
             {
@@ -211,9 +217,11 @@ namespace Gambler.Bot.Core.Sites
                 pairs.Add(new KeyValuePair<string, string>("setting_name", "dice_sound_on"));
 
                 FormUrlEncodedContent Content = new FormUrlEncodedContent(pairs);
-                string sEmitResponse = Client.PostAsync("php/query/account_get_setting.php", Content).Result.Content.ReadAsStringAsync().Result;
+                HttpResponseMessage settingResponse = await Client.PostAsync("php/query/account_get_setting.php", Content);
+                string sEmitResponse = await settingResponse.Content.ReadAsStringAsync();
 
-                foreach (Cookie c in ClientHandlr.CookieContainer.GetCookies(new Uri("https://nitrogensports.eu")))
+                var cookieContainer = await Client.GetCookiesAsync(new Uri("https://nitrogensports.eu"));
+                foreach (Cookie c in cookieContainer.GetCookies(new Uri("https://nitrogensports.eu")))
                 {
                     switch (c.Name)
                     {
@@ -254,21 +262,29 @@ Sec-WebSocket-Protocol:actioncable-v1-json
 Sec-WebSocket-Version:13*/
                 headers.Add(new KeyValuePair<string, string>("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:43.0) Gecko/20100101 Firefox/43.0"));
 
-                NSSocket = new WebSocket("wss://nitrogensports.eu/ws/", "wamp", Cookies, headers, "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:43.0) Gecko/20100101 Firefox/43.0", "https://nitrogensports.eu", WebSocketVersion.Rfc6455, null);
+                NSSocket = Client.CreateSocket(new SiteSocketOptions
+                {
+                    Url = new Uri("wss://nitrogensports.eu/ws/"),
+                    Protocol = "wamp",
+                    Cookies = Cookies,
+                    Headers = headers,
+                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:43.0) Gecko/20100101 Firefox/43.0",
+                    Origin = "https://nitrogensports.eu"
+                });
 
                 NSSocket.Closed += NSSocket_Closed;
                 NSSocket.Error += NSSocket_Error;
                 NSSocket.MessageReceived += NSSocket_MessageReceived;
                 NSSocket.Opened += NSSocket_Opened;
                 NSSocket.Open();
-                while (NSSocket.State == WebSocketState.Connecting)
+                while (NSSocket.State == SiteSocketState.Connecting)
                 {
                     Thread.Sleep(100);
                 }
                 //CurrencyChanged();
                 iskd = true;
                 new Thread(new ThreadStart(GetBalanceThread)).Start();
-                callLoginFinished(NSSocket.State == WebSocketState.Open);
+                callLoginFinished(NSSocket.State == SiteSocketState.Open);
                 return;
                 //loggedin = true;
 
@@ -284,7 +300,7 @@ Sec-WebSocket-Version:13*/
         {
             //throw new NotImplementedException();
         }
-        void NSSocket_MessageReceived(object sender, MessageReceivedEventArgs e)
+        void NSSocket_MessageReceived(object sender, SiteSocketMessageEventArgs e)
         {
             try
             {
@@ -369,7 +385,7 @@ Sec-WebSocket-Version:13*/
         {
             //sqlite_helper.InsertSeed(tmpSeed.previousServerSeedHash, tmpSeed.previousServerSeed);
         }
-        void NSSocket_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
+        void NSSocket_Error(object sender, SiteSocketErrorEventArgs e)
         {
             _logger?.LogError(e.Exception.ToString());
             //throw new NotImplementedException();
@@ -388,7 +404,7 @@ Sec-WebSocket-Version:13*/
 
         protected override async Task<SiteStats> _UpdateStats()
         {
-            if (NSSocket != null && NSSocket.State == WebSocketState.Open && iskd)
+            if (NSSocket != null && NSSocket.State == SiteSocketState.Open && iskd)
             {
                 string s = CreateRandomString();
                 //Requests.Add(s,1);

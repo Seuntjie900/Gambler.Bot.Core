@@ -5,6 +5,7 @@ using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
@@ -32,8 +33,6 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;
-        HttpClientHandler ClientHandlr;//
         public static string[] cCurrencies = new string[] { "USDT", "BTC", "LTC", "TRX", "DECOY", "DOGE", "XRP", "ETH", "XLM",
             "BCH","BNB","SHIB","USDC","ADA","DASH","SOL","ATOM","ETC","EOS","XMR","BTTC","POL","ZEC","DOT","RVN","LINK","DAI",
             "TUSD","AVAX","NEAR","ZEN","AAVE","ENA","UNI","TON","FDUSD","TRUMP","WBTC","INR","PKR","USD","VND","GHS","KZT","BDT",
@@ -102,8 +101,6 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             ispd = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
@@ -113,33 +110,13 @@ namespace Gambler.Bot.Core.Sites
                 accesstoken = LoginParams[0].Value;
 
 
-                var handler = new SocketsHttpHandler
-                {
-                    SslOptions = new SslClientAuthenticationOptions
-                    {
-                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-
-                    },
-                    UseCookies = true,
-                    AllowAutoRedirect = true,
-
-
-                };
-
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["__cf_bm"]);
                 var authcookie = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x => x.Name == "_at");
                 if (authcookie != null)
                 {
                     authcookie.Expired = true;
                 }
-                //handler = new HttpClientHandler
-                //{
-                //    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                //    UseCookies = true,
-                //    CookieContainer = cookies.Cookies,
-
-                //};
-                Client = new HttpClient(handler) { BaseAddress = new Uri(URLInUse + "/api/") }; ;
+                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + "/api/"), Cookies = cookies.Cookies });
                 foreach (var x in cookies.Headers)
                 {
                     try
@@ -149,7 +126,7 @@ namespace Gambler.Bot.Core.Sites
                             || x.Key.ToLower() == "authorization"
                             )
                             continue;
-                        Client.DefaultRequestHeaders.Add(x.Key, x.Value);
+                        Client.DefaultHeaders.Add(x.Key, x.Value);
                     }
                     catch (Exception ex)
                     {
@@ -223,35 +200,29 @@ namespace Gambler.Bot.Core.Sites
         {
             try
             {
-                var cookies = await CallBypassRequired(URLInUse + "/dice" + AffiliateCode, ["_at", "__cf_bm"], false, "/api/load/bets");
-                //accesstoken = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x=>x.Name=="_at")?.Value;
-                HttpClientHandler handler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli | DecompressionMethods.All,
-                    UseCookies = true,
-                    CookieContainer = cookies.Cookies
-                };
-                Client = new HttpClient(handler) { BaseAddress = new Uri(URLInUse + "/api/") }; ;
+                 var cookies = await CallBypassRequired(URLInUse + "/dice" + AffiliateCode, ["_at", "__cf_bm"], false, "/api/load/bets");
+                 //accesstoken = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x=>x.Name=="_at")?.Value;
+                 Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + "/api/"), Cookies = cookies.Cookies });
 
-                foreach (var x in cookies.Headers)
-                {
-                    try
-                    {
-                        if (x.Key.ToLower() == "content-type" || x.Key.ToLower() == "cookie" || x.Key.ToLower() == "accept" || x.Key.ToLower() == "sentry-trace")
-                            continue;
-                        Client.DefaultRequestHeaders.Add(x.Key, x.Value);
-                    }
-                    catch (Exception ex)
-                    {
+                 foreach (var x in cookies.Headers)
+                 {
+                     try
+                     {
+                         if (x.Key.ToLower() == "content-type" || x.Key.ToLower() == "cookie" || x.Key.ToLower() == "accept" || x.Key.ToLower() == "sentry-trace")
+                             continue;
+                         Client.DefaultHeaders.Add(x.Key, x.Value);
+                     }
+                     catch (Exception ex)
+                     {
 
-                    }
-                }/*
-                  
-                  */
-                Client.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
-                Client.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
-                Client.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
-                //Client.DefaultRequestHeaders.Add("content-type", "application/json");
+                     }
+                 }/*
+                   
+                   */
+                 Client.DefaultHeaders.Add("sec-fetch-dest", "empty");
+                 Client.DefaultHeaders.Add("sec-fetch-mode", "cors");
+                 Client.DefaultHeaders.Add("sec-fetch-site", "same-origin");
+                 //Client.DefaultHeaders.Add("content-type", "application/json");
                 var tmprequest = new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
