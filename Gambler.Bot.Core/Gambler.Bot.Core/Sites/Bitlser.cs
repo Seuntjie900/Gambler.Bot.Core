@@ -83,6 +83,7 @@ namespace Gambler.Bot.Core.Sites
             TwistSettings = new TwistConfig() { Edge = 2, MaxRoll = 99m };
             LimboSettings = new LimboConfig() { Edge = 2, MaxPayout = 1000000 };
             RangeDiceSettings = new RangeDiceConfig { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
+            IsEnabled = false;
         }
 
 
