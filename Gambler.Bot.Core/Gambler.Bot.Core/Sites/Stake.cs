@@ -137,10 +137,11 @@ namespace Gambler.Bot.Core.Sites
                     if (x.Param.Name.ToLower() == "api key")
                         APIKey = x.Value;
                 }
+               
                 //CookieContainer cookies = new CookieContainer();
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["__cf_bm"]);
+                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse), Cookies = cookies.Cookies });
 
-                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + URL), Cookies = cookies.Cookies });
 
 
                 foreach (var x in cookies.Headers)
@@ -172,7 +173,7 @@ namespace Gambler.Bot.Core.Sites
                     JsonSerializer.Serialize(LoginReq),
                     Encoding.UTF8,
                     "application/json");
-
+                
                 var tmprequest = new HttpRequestMessage { Method = HttpMethod.Post, RequestUri = new Uri(URLInUse + URL), Content = content, Headers = { { "x-operation-name", "DiceBotLogin" }, { "x-operation-type", "query" } } };
                 var resp = await Client.SendAsync(tmprequest);
 
@@ -180,7 +181,7 @@ namespace Gambler.Bot.Core.Sites
                 int retriees = 0;
                 if (!resp.IsSuccessStatusCode && retry < 5)
                 {
-                    await CallCFCaptchaBypass(respostring);
+                    //await CallCFCaptchaBypass(respostring);
                     await Task.Delay(Random.Next(50, 150) * retry);
                     return await _Login(LoginParams, ++retry);
                 }
