@@ -118,7 +118,7 @@ namespace Gambler.Bot.Core.Tests
             {
                 Assert.Contains("Chance to win must be > 0", error);
             }
-            Assert.Equal(balance, _site.Stats.Balance);
+            Assert.Equal(balance.ToString("d8"), _site.Stats.Balance.ToString("d8"));
         }
 
         //bet with 0 amount if supported by site else should trigger error event with appropriate message

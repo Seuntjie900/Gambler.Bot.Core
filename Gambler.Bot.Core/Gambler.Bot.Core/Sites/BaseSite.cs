@@ -14,6 +14,7 @@ using Gambler.Bot.Common.Interfaces;
 using Gambler.Bot.Core.Events;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -247,6 +248,33 @@ namespace Gambler.Bot.Core.Sites
 
         public string URLInUse { get; protected set; }
 
+        /// <summary>
+        /// The factory used to create the site's <see cref="ISiteClient"/>. Defaults to the
+        /// direct <see cref="HttpClientSiteClientFactory"/>; hosts may replace it (e.g. with a
+        /// browser-backed factory) before login.
+        /// </summary>
+        public ISiteClientFactory SiteClientFactory { get; set; } = new HttpClientSiteClientFactory();
+
+        /// <summary>
+        /// The transport client used by the site for HTTP requests and WebSockets. Owned by the
+        /// base class; sites should assign it via <see cref="CreateClientAsync"/> rather than
+        /// constructing an <c>HttpClient</c> directly.
+        /// </summary>
+        public ISiteClient Client { get; protected set; }
+
+        /// <summary>
+        /// Creates (or replaces) the site's <see cref="Client"/> using <see cref="SiteClientFactory"/>,
+        /// disposing any existing client first. Returns the new client.
+        /// </summary>
+        protected async Task<ISiteClient> CreateClientAsync(SiteClientOptions options)
+        {
+            var newClient = await SiteClientFactory.CreateClientAsync(options);
+            var previous = Client;
+            Client = newClient;
+            previous?.Dispose();
+            return Client;
+        }
+
         #region Required Methods
 
         /// <summary>
@@ -308,7 +336,8 @@ namespace Gambler.Bot.Core.Sites
         {
             LoggedIn = false;
             _Disconnect();
-            
+            Client?.Dispose();
+            Client = null;
         }
 
         /// <summary>

@@ -16,6 +16,7 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using static System.Net.WebRequestMethods;
 
@@ -23,8 +24,6 @@ namespace Gambler.Bot.Core.Sites
 {
     public class Bitvest : BaseSite, iDice
     {
-        HttpClient Client;// = new HttpClient { BaseAddress = new Uri("https://api.primedice.com/api/") };
-        HttpClientHandler ClientHandlr;
         public bool isbv = false;
         string accesstoken = "";
         DateTime lastupdate = new DateTime();
@@ -61,7 +60,7 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = true;
             this.CanVerify = true;
             this.Currencies = new string[] { "btc", "tok", "ltc", "eth", "doge", "bch" };
-
+            CurrencyMap.Add("btc", "bitcoins");
             CurrencyMap.Add("tok", "tokens");
             CurrencyMap.Add("ltc", "litecoins");
             CurrencyMap.Add("eth", "ethers");
@@ -84,17 +83,12 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             isbv = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
         {
             //ServicePointManager.SecurityProtocol &= SecurityProtocolType.Ssl3;
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip/*, Proxy = this.Prox, UseProxy = Prox != null*/ };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri(URLInUse) };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse) });
 
             string Username = "";
             string Password = "";
@@ -253,7 +247,7 @@ namespace Gambler.Bot.Core.Sites
                 decimal tmpchance = High ? DiceSettings.MaxRoll - chance + 0.0001m : chance - 0.0001m;
                 List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
 
-                pairs.Add(new KeyValuePair<string, string>("bet", (amount).ToString(System.Globalization.NumberFormatInfo.InvariantInfo)));
+                pairs.Add(new KeyValuePair<string, string>("bet", (amount).ToString("0.00000000",System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("target", tmpchance.ToString("0.0000", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("side", High ? "high" : "low"));
                 pairs.Add(new KeyValuePair<string, string>("act", "play_dice"));
@@ -463,7 +457,7 @@ namespace Gambler.Bot.Core.Sites
 
                 Thread.Sleep(500);
                 List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
-                pairs.Add(new KeyValuePair<string, string>("quantity", (Amount).ToString("", System.Globalization.NumberFormatInfo.InvariantInfo)));
+                pairs.Add(new KeyValuePair<string, string>("quantity", (Amount).ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo)));
                 pairs.Add(new KeyValuePair<string, string>("address", Address));
                 pairs.Add(new KeyValuePair<string, string>("act", "withdraw"));
                 pairs.Add(new KeyValuePair<string, string>("c", "99999999"));
@@ -827,7 +821,7 @@ namespace Gambler.Bot.Core.Sites
 
         public class Chat
         {
-            public string max_id { get; set; }
+            public long max_id { get; set; }
             public object msg { get; set; }
             public object delete { get; set; }
         }
@@ -965,7 +959,7 @@ namespace Gambler.Bot.Core.Sites
             public string balance_dogecoin { get; set; }
             public string balance_bcash { get; set; }
             public string self_username { get; set; }
-            public string self_user_id { get; set; }
+            public long self_user_id { get; set; }
 
 
         }

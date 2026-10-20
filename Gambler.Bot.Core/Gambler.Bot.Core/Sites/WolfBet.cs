@@ -6,6 +6,7 @@ using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -27,8 +28,6 @@ namespace Gambler.Bot.Core.Sites
         string accesstoken = "";
         public bool ispd = false;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;
-        HttpClientHandler ClientHandlr;
 
         public DiceConfig DiceSettings { get; set; }
         public LimboConfig LimboSettings { get; set; }
@@ -83,26 +82,21 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             this.ispd = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
         {
 
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri(URLInUse + "/api/v1/") };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            Client.DefaultRequestHeaders.Add("UserAgent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36");
-            Client.DefaultRequestHeaders.Add("Origin", URLInUse);
-            Client.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + "/api/v1/") });
+            Client.DefaultHeaders.Add("UserAgent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36");
+            Client.DefaultHeaders.Add("Origin", URLInUse);
+            Client.DefaultHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
             try
             {
                 string Password = LoginParams.First(m => m.Param?.Name?.ToLower() == "api key").Value;
                 if (Password != null)
                 {
-                    Client.DefaultRequestHeaders.Add("authorization", "Bearer " + Password);
+                    Client.DefaultHeaders.Add("authorization", "Bearer " + Password);
                 }
                 string sEmitResponse = await Client.GetStringAsync("user/balances");
                 try

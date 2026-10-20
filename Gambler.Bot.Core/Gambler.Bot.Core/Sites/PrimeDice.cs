@@ -4,6 +4,7 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -25,7 +26,6 @@ namespace Gambler.Bot.Core.Sites
         protected string RolName = "primediceRoll";
         protected string GameName = "CasinoGamePrimedice";
         protected string StatGameName = "primedice";
-        HttpClient Client;
 
         string accesstoken = "";
         DateTime LastSeedReset = new DateTime();
@@ -77,8 +77,6 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             ispd = false;
-            Client = null;
-
         }
         string userid = "";
         async Task OnWSConnected(GraphQL.Client.Http.GraphQLHttpClient client)
@@ -111,14 +109,7 @@ namespace Gambler.Bot.Core.Sites
                 string requiredCookie = "__cf_bm";
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, [requiredCookie], true, URL);
 
-                HttpClientHandler handler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.All,
-                    UseCookies = true,
-                    CookieContainer = cookies.Cookies,
-
-                };
-                Client = new HttpClient(handler);
+                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + URL), Cookies = cookies.Cookies });
 
                 foreach (var x in cookies.Headers)
                 {
@@ -129,15 +120,15 @@ namespace Gambler.Bot.Core.Sites
                             || x.Key.ToLower() == "authorization"
                             || x.Key.ToLower() == "x-access-token")
                             continue;
-                        Client.DefaultRequestHeaders.Add(x.Key, x.Value);
+                        Client.DefaultHeaders.Add(x.Key, x.Value);
                     }
                     catch (Exception ex)
                     {
 
                     }
                 }
-                Client.DefaultRequestHeaders.Add("X-Access-Token", APIKey);
-                Client.DefaultRequestHeaders.Add("Authorization", "Bearer " + APIKey);
+                Client.DefaultHeaders.Add("X-Access-Token", APIKey);
+                Client.DefaultHeaders.Add("Authorization", "Bearer " + APIKey);
 
                 GraphqlRequestPayload LoginReq = new GraphqlRequestPayload
                 {
@@ -506,14 +497,7 @@ namespace Gambler.Bot.Core.Sites
             {
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["session", "__cf_bm"], false, URL);
                 string APIKey = cookies.Cookies.GetCookies(new Uri(URLInUse)).FirstOrDefault(x => x.Name.ToLower() == "session")?.Value;
-                HttpClientHandler handler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli | DecompressionMethods.All,
-                    UseCookies = true,
-                    CookieContainer = cookies.Cookies,
-                };
-                Client = new HttpClient(handler);
-                Client.BaseAddress = new Uri(URLInUse + URL);
+                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse + URL), Cookies = cookies.Cookies });
                 foreach (var x in cookies.Headers)
                 {
                     try
@@ -523,7 +507,7 @@ namespace Gambler.Bot.Core.Sites
                             || x.Key.ToLower() == "x-operation-name"
                             || x.Key.ToLower() == "x-operation-type")
                             continue;
-                        Client.DefaultRequestHeaders.Add(x.Key, x.Value);
+                        Client.DefaultHeaders.Add(x.Key, x.Value);
                     }
                     catch (Exception ex)
                     {

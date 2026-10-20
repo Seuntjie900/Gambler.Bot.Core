@@ -4,6 +4,7 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
@@ -22,8 +23,6 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;// = new HttpClient { BaseAddress = new Uri("https://api.primedice.com/api/") };
-        HttpClientHandler ClientHandlr;
         public static string[] sCurrencies = new string[] { "BTC", "Doge", "ETH",  "Bch", "PLAY", "LTC",  "ETC","USDC","USDT","SOL","BNB","POL","PEPE","SHIB","XRP" };
         string CurrenyHash = "";
 
@@ -67,16 +66,11 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             iscg = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
         {
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri($"{URLInUse.Replace("www","api")}/v1/") };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri($"{URLInUse.Replace("www","api")}/v1/") });
             try
             {
                 accesstoken = LoginParams[0].Value;

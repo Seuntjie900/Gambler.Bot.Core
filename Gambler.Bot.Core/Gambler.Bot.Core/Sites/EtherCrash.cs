@@ -4,6 +4,7 @@ using Gambler.Bot.Common.Games.Crash;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -13,7 +14,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using WebSocket4Net;
 
 namespace Gambler.Bot.Core.Sites
 {
@@ -22,10 +22,8 @@ namespace Gambler.Bot.Core.Sites
         PlaceCrashBet LastBet = null;
         string Token = "";
         CookieContainer Cookies;
-        HttpClientHandler ClientHandlr;
-        HttpClient Client;
-        WebSocket Sock;
-        WebSocket ChatSock;
+        ISiteSocket Sock;
+        ISiteSocket ChatSock;
         bool isec = false;
         string username = "";
         string io = "";
@@ -78,13 +76,10 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             isec = false;
-            if (Sock != null && Sock.State == WebSocketState.Open)
-            {
-                ChatSock.Close();
-                Sock.Close();
-            }
-            Client = null;
-            ClientHandlr = null;
+            Sock?.Dispose();
+            ChatSock?.Dispose();
+            Sock = null;
+            ChatSock = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
@@ -99,13 +94,11 @@ namespace Gambler.Bot.Core.Sites
             }
             var bypassResult = await CallBypassRequired(SiteURL, ["cf_clearance"]);
             Cookies = bypassResult.Cookies;
-            ClientHandlr = new HttpClientHandler { UseCookies = true, CookieContainer = Cookies, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip }; ;
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri(URLInUse) };
-            //Client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36");
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse), Cookies = Cookies, UserAgent = bypassResult.UserAgent });
+            //Client.DefaultHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36");
 
-            Client.DefaultRequestHeaders.UserAgent.ParseAdd(bypassResult.UserAgent);
-            Client.DefaultRequestHeaders.Add("referer", URLInUse);
-            Client.DefaultRequestHeaders.Add("origin", URLInUse);
+            Client.DefaultHeaders.Add("referer", URLInUse);
+            Client.DefaultHeaders.Add("origin", URLInUse);
             try
             {
                 var webresponse = await Client.GetAsync($"{URLInUse}/play");
@@ -189,26 +182,26 @@ namespace Gambler.Bot.Core.Sites
                 wscookies.Add(new KeyValuePair<string, string>("io", iochat));
                 wscookies.Add(new KeyValuePair<string, string>("id", APIKey));
 
-                ChatSock = new WebSocket($"{URLInUse.Replace("https","wss")}/socket.io/?EIO=3&transport=websocket&sid=" + iochat,
-                   null,
-                   wscookies,
-                   null,
-                   bypassResult.UserAgent,
-                   $"{URLInUse}"/*,
-                    WebSocketVersion.None*/);
+                ChatSock = Client.CreateSocket(new SiteSocketOptions
+                {
+                    Url = new Uri($"{URLInUse.Replace("https","wss")}/socket.io/?EIO=3&transport=websocket&sid=" + iochat),
+                    Cookies = wscookies,
+                    UserAgent = bypassResult.UserAgent,
+                    Origin = $"{URLInUse}"
+                });
                 ChatSock.Opened += Sock_Opened;
                 ChatSock.Error += Sock_Error;
                 ChatSock.MessageReceived += Sock_MessageReceived;
                 ChatSock.Closed += Sock_Closed;
-                
+
                 ChatSock.Open();
-                while (ChatSock.State == WebSocketState.Connecting)
+                while (ChatSock.State == SiteSocketState.Connecting)
                 {
                     Thread.Sleep(300);
                     //Response = Client.GetStringAsync("https://gs.ethercrash.io/socket.io/?EIO=3&sid=" + io + "&transport=polling&t=" + json.CurrentDate()).Result;
 
                 }
-                if (ChatSock.State == WebSocketState.Open)
+                if (ChatSock.State == SiteSocketState.Open)
                 {
                 }
                 else
@@ -233,25 +226,22 @@ namespace Gambler.Bot.Core.Sites
                 headers.Add(new KeyValuePair<string, string>("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"));
                 headers.Add(new KeyValuePair<string, string>("Origin", "https://www.ethercrash.io"));
 
-                Sock = new WebSocket("wss://gs.ethercrash.io/socket.io/?EIO=3&transport=websocket&sid=" + io/*,
-                    null,
-                    cookies2,
-                    headers,
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36",
-                    "https://www.ethercrash.io",
-                        WebSocketVersion.None*/);
+                Sock = Client.CreateSocket(new SiteSocketOptions
+                {
+                    Url = new Uri("wss://gs.ethercrash.io/socket.io/?EIO=3&transport=websocket&sid=" + io)
+                });
                 Sock.Opened += Sock_Opened;
                 Sock.Error += Sock_Error;
                 Sock.MessageReceived += Sock_MessageReceived;
                 Sock.Closed += Sock_Closed;
                 Sock.Open();
-                while (Sock.State == WebSocketState.Connecting)
+                while (Sock.State == SiteSocketState.Connecting)
                 {
                     Thread.Sleep(300);
                     //Response = Client.GetStringAsync("https://gs.ethercrash.io/socket.io/?EIO=3&sid=" + io + "&transport=polling&t=" + json.CurrentDate()).Result;
 
                 }
-                if (Sock.State == WebSocketState.Open)
+                if (Sock.State == SiteSocketState.Open)
                 {
                     callLoginFinished(true);
                     isec = true;
@@ -309,11 +299,11 @@ namespace Gambler.Bot.Core.Sites
         bool cashedout = false;
         string GameId = "";
         CrashBet CurrentBet = null;
-        private void Sock_MessageReceived(object sender, MessageReceivedEventArgs e)
+        private void Sock_MessageReceived(object sender, SiteSocketMessageEventArgs e)
         {
             if (e.Message == "3probe")
             {
-                (sender as WebSocket).Send("5");
+                (sender as ISiteSocket).Send("5");
                 //Sock.Send("420[\"join\",{\"ott\":\"" + ott + "\",\"api_version\":1}]");     
             }
             else
@@ -425,7 +415,7 @@ namespace Gambler.Bot.Core.Sites
 
         public CrashConfig CrashSettings { get; set; }
 
-        private void Sock_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
+        private void Sock_Error(object sender, SiteSocketErrorEventArgs e)
         {
             _logger?.LogError(e.Exception.ToString());
             callError("Websocket error - disconnected.", true, ErrorType.Unknown);
@@ -433,12 +423,12 @@ namespace Gambler.Bot.Core.Sites
 
         private void Sock_Opened(object sender, EventArgs e)
         {
-            (sender as WebSocket).Send("2probe");
+            (sender as ISiteSocket).Send("2probe");
         }
 
         public async Task<CrashBet> PlaceCrashBet(PlaceCrashBet BetDetails)
         {
-            if (betsOpen && Sock.State == WebSocketState.Open)
+            if (betsOpen && Sock.State == SiteSocketState.Open)
             {
                 decimal amount = Math.Round(BetDetails.Amount, 6);
 

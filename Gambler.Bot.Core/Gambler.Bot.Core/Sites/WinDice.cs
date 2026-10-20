@@ -5,6 +5,7 @@ using Gambler.Bot.Common.Games.RangeDice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -28,8 +29,6 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;
-        HttpClientHandler ClientHandlr;        
         Random R = new Random();
         WDGetSeed currentseed;
 
@@ -178,19 +177,14 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             ispd = false;
-            Client = null;
-            ClientHandlr = null;
         }
 
         protected override async Task<bool> _Login(LoginParamValue[] LoginParams)
         {
             _logger.LogDebug("WinDice Logging in");
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri($"{URLInUse}/api/v1/api/") };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            Client.DefaultRequestHeaders.Add("UserAgent", "DiceBot");
-            Client.DefaultRequestHeaders.Add("Authorization", LoginParams.First(m=>m.Param?.Name?.ToLower()=="api key")?.Value);
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri($"{URLInUse}/api/v1/api/") });
+            Client.DefaultHeaders.Add("UserAgent", "DiceBot");
+            Client.DefaultHeaders.Add("Authorization", LoginParams.First(m=>m.Param?.Name?.ToLower()=="api key")?.Value);
             try
             {
                 if (await getbalance())

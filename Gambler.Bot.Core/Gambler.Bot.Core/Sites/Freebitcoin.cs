@@ -12,6 +12,7 @@ using Gambler.Bot.Common.Games.Dice;
 using Gambler.Bot.Common.Helpers;
 using Gambler.Bot.Core.Helpers;
 using Gambler.Bot.Core.Sites.Classes;
+using Gambler.Bot.Core.SiteClient;
 using Microsoft.Extensions.Logging;
 
 namespace Gambler.Bot.Core.Sites
@@ -24,8 +25,6 @@ namespace Gambler.Bot.Core.Sites
         string username = "";
         long uid = 0;
         DateTime lastupdate = new DateTime();
-        HttpClient Client;
-        HttpClientHandler ClientHandlr;
 
 
         public Freebitcoin(ILogger logger) : base(logger)
@@ -68,8 +67,6 @@ namespace Gambler.Bot.Core.Sites
         protected override void _Disconnect()
         {
             ispd = false;
-            Client = null;
-            ClientHandlr = null;
         }
         CookieContainer Cookies = new CookieContainer();
         string csrf = "";
@@ -88,11 +85,7 @@ namespace Gambler.Bot.Core.Sites
                 if (x.Param.Name.ToLower() == "2fa code")
                     otp = x.Value;
             }
-            ClientHandlr = new HttpClientHandler { UseCookies = true, AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip };
-            Client = new HttpClient(ClientHandlr) { BaseAddress = new Uri(URLInUse) };
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
-            Client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            ClientHandlr.CookieContainer = Cookies;
+            Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse), Cookies = Cookies });
             try
             {
                 string s1 = "";
@@ -371,15 +364,7 @@ namespace Gambler.Bot.Core.Sites
 
                 var cookies = await CallBypassRequired(URLInUse + AffiliateCode, ["cf_clearance","password"], false, "/cgi-bin/");
 
-                HttpClientHandler handler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
-                    UseCookies = true,
-                    CookieContainer = cookies.Cookies,
-                };
-                Client = new HttpClient(handler);
-                Client.BaseAddress = new Uri(URLInUse);
-
+                Client = await CreateClientAsync(new SiteClientOptions { BaseAddress = new Uri(URLInUse), Cookies = cookies.Cookies });
 
                 foreach (var x in cookies.Headers)
                 {
@@ -390,7 +375,7 @@ namespace Gambler.Bot.Core.Sites
                             || x.Key.ToLower() == "authorization"
                             || x.Key.ToLower() == "x-access-token")
                             continue;
-                        Client.DefaultRequestHeaders.Add(x.Key, x.Value);
+                        Client.DefaultHeaders.Add(x.Key, x.Value);
                     }
                     catch (Exception ex)
                     {
