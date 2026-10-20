@@ -60,7 +60,7 @@ namespace Gambler.Bot.Core.Sites
             this.CanTip = true;
             this.CanVerify = true;
             this.AutoBank = true;
-            this.SupportsBrowserLogin = true;
+            this.SupportsBrowserLogin = false;
             this.Currencies = new string[]
             {
                 "JPY",

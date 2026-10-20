@@ -75,7 +75,7 @@ namespace Gambler.Bot.Core.Sites
             DiceSettings = new DiceConfig() { Edge = 1, MaxRoll = 99.99m };
             RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
             NonceBased = true;
-            SupportsBrowserLogin = true;
+            SupportsBrowserLogin = false;
         }
 
         void GetBalanceThread()
