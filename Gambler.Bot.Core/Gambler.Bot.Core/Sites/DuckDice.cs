@@ -22,6 +22,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using static Gambler.Bot.Core.Sites.Bitvest;
 using static Gambler.Bot.Core.Sites.NitrogenSports;
+using System.Collections.Generic;
 
 namespace Gambler.Bot.Core.Sites
 {
@@ -53,7 +54,7 @@ namespace Gambler.Bot.Core.Sites
             this.Mirrors.Add("https://duckdice.io");
             this.Mirrors.Add("https://duckdice.me");
             this.Mirrors.Add("https://duckdice.net");
-            this.GameModes.Add("Faucet");
+            //this.GameModes.Add("Faucet");
             AffiliateCode = "?c=53ea652da4";
             this.Stats = new SiteStats();
             this.TipUsingName = true;
@@ -134,20 +135,28 @@ namespace Gambler.Bot.Core.Sites
                     }
                 }
 
-                var EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
+                var EmitResponse = await Client.GetAsync("bot/user-info" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                 var sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 int retriees = 0;
                 while (!EmitResponse.IsSuccessStatusCode && retriees++ < 5)
                 {
                     await CallCFCaptchaBypass(sEmitResponse);
                     await Task.Delay(Random.Next(50, 150) * retriees);
-                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
+                    EmitResponse = await Client.GetAsync("bot/user-info"  + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 }
 
                 if (EmitResponse.IsSuccessStatusCode)
                 {
-                    Quackbalance balance = JsonSerializer.Deserialize<Quackbalance>(sEmitResponse);
+                    QuackUserInfo balance = JsonSerializer.Deserialize<QuackUserInfo>(sEmitResponse);
+                   /* var jdoc = JsonDocument.Parse(sEmitResponse);
+                    var balancesnode = jdoc.RootElement.GetProperty("user").GetProperty("balances");
+                    List<string> balanceTyps = new List<string>();
+                    foreach (var x in balancesnode.EnumerateObject())
+                    {
+                        balanceTyps.Add(x.Name);
+                    }*/
+                   
                     sEmitResponse = await Client.GetStringAsync("bot/stats/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
                     /*sEmitResponse = await Client.GetStringAsync("randomize" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
@@ -156,13 +165,13 @@ namespace Gambler.Bot.Core.Sites
                     {
                         if (this.SelectedGameMode == "Normal")
                         {
-                            Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
+                            Stats.Balance = decimal.Parse(balance.balances.FirstOrDefault(x=>x.currency.ToLower() == CurrentCurrency.ToLower())?.main, System.Globalization.NumberFormatInfo.InvariantInfo);
                         }
-                        else
+                        /*else
                         {
                             Stats.Balance = decimal.Parse(balance.user.balances.faucet, System.Globalization.NumberFormatInfo.InvariantInfo);
-                        }
-                        Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
+                        }*/
+                        //Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Profit = decimal.Parse(_Stats.profit, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Wagered = decimal.Parse(_Stats.volume, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Bets = _Stats.bets;
@@ -640,6 +649,55 @@ namespace Gambler.Bot.Core.Sites
         {
             public string main { get; set; }
             public string faucet { get; set; }
+        }
+        public class QuackUserInfo
+        {
+            public string hash { get; set; }
+            public string username { get; set; }
+            public int createdAt { get; set; }
+            public string campaign { get; set; }
+            public string affiliate { get; set; }
+            public QuackLastdeposit lastDeposit { get; set; }
+            public QuackWagered[] wagered { get; set; }
+            public QuackBalance[] balances { get; set; }
+            public QuackWageringbonus[] wageringBonuses { get; set; }
+            public QuackTle[] tle { get; set; }
+        }
+
+        public class QuackLastdeposit
+        {
+            public int createdAt { get; set; }
+            public string currency { get; set; }
+            public string amount { get; set; }
+        }
+
+        public class QuackWagered
+        {
+            public string currency { get; set; }
+            public string amount { get; set; }
+        }
+
+        public class QuackBalance
+        {
+            public string currency { get; set; }
+            public string main { get; set; }
+        }
+
+        public class QuackWageringbonus
+        {
+            public string name { get; set; }
+            public string type { get; set; }
+            public string hash { get; set; }
+            public string status { get; set; }
+            public string symbol { get; set; }
+            public string margin { get; set; }
+        }
+
+        public class QuackTle
+        {
+            public string hash { get; set; }
+            public string name { get; set; }
+            public string status { get; set; }
         }
         public class QuackBank
         {
