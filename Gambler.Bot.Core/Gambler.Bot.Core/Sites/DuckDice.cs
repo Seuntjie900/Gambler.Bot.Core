@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using static Gambler.Bot.Core.Sites.Bitvest;
 using static Gambler.Bot.Core.Sites.NitrogenSports;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 
 namespace Gambler.Bot.Core.Sites
 {
@@ -43,6 +44,7 @@ namespace Gambler.Bot.Core.Sites
 
         public DiceConfig DiceSettings { get; set; }
         public RangeDiceConfig RangeDiceSettings { get; set; }
+        Dictionary<string, (bool, string)> balances = new Dictionary<string, (bool, string)>();
 
         public DuckDice(ILogger logger) : base(logger)
         {
@@ -77,6 +79,7 @@ namespace Gambler.Bot.Core.Sites
             RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
             NonceBased = true;
             SupportsBrowserLogin = false;
+            balances.Add("Normal", (false, null));
         }
 
         void GetBalanceThread()
@@ -149,13 +152,34 @@ namespace Gambler.Bot.Core.Sites
                 if (EmitResponse.IsSuccessStatusCode)
                 {
                     QuackUserInfo balance = JsonSerializer.Deserialize<QuackUserInfo>(sEmitResponse);
-                   /* var jdoc = JsonDocument.Parse(sEmitResponse);
-                    var balancesnode = jdoc.RootElement.GetProperty("user").GetProperty("balances");
-                    List<string> balanceTyps = new List<string>();
-                    foreach (var x in balancesnode.EnumerateObject())
+                    /* var jdoc = JsonDocument.Parse(sEmitResponse);
+                     var balancesnode = jdoc.RootElement.GetProperty("user").GetProperty("balances");
+                     List<string> balanceTyps = new List<string>();
+                     foreach (var x in balancesnode.EnumerateObject())
+                     {
+                         balanceTyps.Add(x.Name);
+                     }*/
+                    foreach (var x in balance.wageringBonuses)
                     {
-                        balanceTyps.Add(x.Name);
-                    }*/
+                        if (x.status == "active")
+                        {
+                            balances.Add(x.name, (false, x.hash));
+                        }
+                    }
+                    foreach (var x in balance.tle)
+                    {
+                        if (x.status == "active")
+                        {
+                            balances.Add(x.name, (true, x.hash));
+                        }
+                    }
+                    foreach(var x in balances.Keys)
+                    {
+                        if (!this.GameModes.Contains(x))
+                        {
+                            this.GameModes.Add(x);
+                        }
+                    }
                    
                     sEmitResponse = await Client.GetStringAsync("bot/stats/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
@@ -346,7 +370,16 @@ namespace Gambler.Bot.Core.Sites
             decimal amount = BetDetails.Amount;
             decimal chance = BetDetails.Chance;
             bool High = BetDetails.High;
-            StringContent Content = new StringContent(string.Format(System.Globalization.NumberFormatInfo.InvariantInfo, "{{\"amount\":\"{0:0.00000000}\",\"symbol\":\"{1}\",\"chance\":{2:0.00},\"isHigh\":{3},\"faucet\":{4}}}", amount, CurrentCurrency, chance, High ? "true" : "false", (SelectedGameMode == "Faucet").ToString().ToLower()), Encoding.UTF8, "application/json");
+            
+            duckPlaceBet tmpBet = new duckPlaceBet {
+                amount= amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo),
+                symbol=CurrentCurrency,
+                chance= chance.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo),
+                isHigh = High,
+                tleHash = balances[SelectedGameMode].Item1 ? balances[SelectedGameMode].Item2 : default,
+                userWageringBonusHash = balances[SelectedGameMode].Item1 ? default : balances[SelectedGameMode].Item2
+            };
+            StringContent Content = new StringContent(JsonSerializer.Serialize(tmpBet), Encoding.UTF8, "application/json");
             try
             {
                 var response = await Client.PostAsync("play" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
@@ -490,7 +523,12 @@ namespace Gambler.Bot.Core.Sites
         {
             decimal amount = BetDetails.Amount;
 
-            duckPlaceRangeBet placebet = new duckPlaceRangeBet { amount = BetDetails.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo), isIn = BetDetails.Type == RangeDiceType.In, symbol = CurrentCurrency, };
+            duckPlaceRangeBet placebet = new duckPlaceRangeBet 
+            { amount = BetDetails.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo), 
+                isIn = BetDetails.Type == RangeDiceType.In, symbol = CurrentCurrency,
+                tleHash = balances[SelectedGameMode].Item1 ? balances[SelectedGameMode].Item2:default,
+                userWageringBonusHash = balances[SelectedGameMode].Item1 ? default: balances[SelectedGameMode].Item2 
+            };
             placebet.range = new int[] { (int)(BetDetails.Min * 100), (int)(BetDetails.Max * 100) };
             StringContent Content = new StringContent(JsonSerializer.Serialize(placebet), Encoding.UTF8, "application/json");
             try
@@ -721,7 +759,15 @@ namespace Gambler.Bot.Core.Sites
             public object tleHash { get; set; }
             public object userWageringBonusHash { get; set; }
         }
-
+        public class duckPlaceBet
+        {
+            public string amount { get; set; }
+            public string symbol { get; set; }
+            public bool isHigh { get; set; }
+            public string chance { get; set; }
+            public object tleHash { get; set; }
+            public object userWageringBonusHash { get; set; }
+        }
 
         public class QuakRangeBetResponse
         {

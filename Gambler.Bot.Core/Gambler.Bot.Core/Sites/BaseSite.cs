@@ -890,6 +890,8 @@ namespace Gambler.Bot.Core.Sites
                     return (this as iLimbo).LimboSettings;
                 case Games.Twist:
                     return (this as iTwist).TwistSettings;
+                case Games.RangeDice:
+                    return (this as iRangeDice)?.RangeDiceSettings;
                 case Games.Crash:
                     return (this as iCrash).CrashSettings;
                 

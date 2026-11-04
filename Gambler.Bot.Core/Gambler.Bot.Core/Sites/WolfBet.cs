@@ -45,9 +45,9 @@ namespace Gambler.Bot.Core.Sites
             //this.MaxRoll = 99.99m;
             this.SiteAbbreviation = "WB";
             this.SiteName = "Wolfbet";
-            this.SiteURL = "https://Wolfbet.com?c=Seuntjie";
+            this.SiteURL = "https://Wolfbet.com?c=gamblerbot";
             this.Mirrors.Add("https://Wolfbet.com");
-            AffiliateCode = "?c=Seuntjie";
+            AffiliateCode = "?c=gamblerbot";
             this.Stats = new SiteStats();
             this.TipUsingName = true;
             this.AutoInvest = false;
