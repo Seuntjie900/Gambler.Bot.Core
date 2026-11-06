@@ -111,7 +111,7 @@ namespace Gambler.Bot.Core.Sites
                 FormUrlEncodedContent Content = new FormUrlEncodedContent(pairs);
                 var response = await Client.PostAsync($"{URLInUse}/login.php", Content);
                 resp = await response.Content.ReadAsStringAsync();
-                bitvestLoginBase tmpblogin = JsonSerializer.Deserialize<bitvestLoginBase>(resp.Replace("-", "_"));
+                bitvestLoginBase tmpblogin = JsonSerializer.Deserialize<bitvestLoginBase>(resp/**/);
                 bitvestLogin tmplogin = tmpblogin.data;
                 secret = tmpblogin.account.secret;
                 pairs = new List<KeyValuePair<string, string>>();
@@ -125,10 +125,10 @@ namespace Gambler.Bot.Core.Sites
                 response = await Client.PostAsync($"{URLInUse}/update.php", Content);
                 resp = await response.Content.ReadAsStringAsync();
 
-                string tmpresp = resp.Replace("-", "_");
+                string tmpresp = resp;
                 tmpblogin = JsonSerializer.Deserialize<bitvestLoginBase>(tmpresp);
                 tmplogin = tmpblogin.data;
-                if (tmplogin.session_token != null)
+                //if (tmplogin.session_token != null)
                 {
                     pairs =
                     [
@@ -142,7 +142,7 @@ namespace Gambler.Bot.Core.Sites
                     Content = new FormUrlEncodedContent(pairs);
                     response = await Client.PostAsync($"{URLInUse}/login.php", Content);
                     resp = await response.Content.ReadAsStringAsync();
-                    tmpresp = resp.Replace("-", "_");
+                    tmpresp = resp;
                     tmpblogin = JsonSerializer.Deserialize<bitvestLoginBase>(tmpresp);
                     //Weights = tmpblogin.currency_weight;
                     Limits = tmpblogin.rate_limits;
@@ -199,11 +199,11 @@ namespace Gambler.Bot.Core.Sites
                     callLoginFinished(true);
                     return true;
                 }
-                else
+               /* else
                 {
                     callLoginFinished(false);
                     return false;
-                }
+                }*/
 
             }
             catch (AggregateException e)
@@ -576,13 +576,17 @@ namespace Gambler.Bot.Core.Sites
 
         public class bitvestLoginBase
         {
+            [JsonPropertyName("update-interval")]
             public int update_interval { get; set; }
             public bitvestLogin data { get; set; }
             //public Chat chat { get; set; }
             //public Game game { get; set; }
             public bitvestAccount account { get; set; }
+            [JsonPropertyName("rate-limits")]
             public double[] rate_limits { get; set; }
+            [JsonPropertyName("last-user-seed")]
             public string last_user_seed { get; set; }
+            [JsonPropertyName("server-hash")]
             public string server_hash { get; set; }
             public bitvesttip tip { get; set; }
         }
@@ -590,15 +594,20 @@ namespace Gambler.Bot.Core.Sites
         public class bitvestLogin
         {
             public string balance { get; set; }
+            [JsonPropertyName("balance-ether")]
             public string balance_ether { get; set; }
+            [JsonPropertyName("balance-litecoin")]
             public string balance_litecoin { get; set; }
+            [JsonPropertyName("balance-bcash")]
             public string balance_bcash { get; set; }
+            [JsonPropertyName("balance-dogecoin")]
             public string balance_dogecoin { get; set; }
             /*public string pending_bitcoin { get; set; }
             public string pending_ether { get; set; }
             public string pending_litecoin { get; set; }
             public string pending_bcash { get; set; }
             public string pending_dogecoin { get; set; }*/
+            [JsonPropertyName("token-balance")]
             public string token_balance { get; set; }
            /* public string self_username { get; set; }
             public object self_user_id { get; set; }
@@ -611,20 +620,27 @@ namespace Gambler.Bot.Core.Sites
             public string chat_announcement { get; set; }
             public string chat_event_announcement { get; set; }
             public int chatrooms { get; set; }*/
+            [JsonPropertyName("session-token")]
             public string session_token { get; set; }
             /*public bool api_enabled { get; set; }
             public bool mystats_private { get; set; }
             public Divest_Lock divest_lock { get; set; }
 
             public string self_total_bet { get; set; }*/
+            [JsonPropertyName("self-total-bet-ether")]
             public string self_total_bet_ether { get; set; }
+            [JsonPropertyName("self-total-bet-litecoin")]
             public string self_total_bet_litecoin { get; set; }
             /*public string self_total_bet_bcash { get; set; }
             public string self_total_bet_dogecoin { get; set; }
             public string self_total_won { get; set; }*/
+            [JsonPropertyName("self-total-won-ether")]
             public string self_total_won_ether { get; set; }
+            [JsonPropertyName("self-total-won-litecoin")]
             public string self_total_won_litecoin { get; set; }
+            [JsonPropertyName("self-total-won-bcash")]
             public string self_total_won_bcash { get; set; }
+            [JsonPropertyName("self-total-won-dogecoin")]
             public string self_total_won_dogecoin { get; set; }
            /* public string self_profit_percent { get; set; }
             public string self_profit_percent_ether { get; set; }
@@ -680,11 +696,13 @@ namespace Gambler.Bot.Core.Sites
             public string self_profit_percent_bitspin_bcash { get; set; }
             public string self_profit_percent_bitspin_dogecoin { get; set; }
             public string self_total_bets_bitspin { get; set; }*/
+            [JsonPropertyName("self-total-bet-dice")]
             public string self_total_bet_dice { get; set; }
             /*public string self_total_bet_dice_ether { get; set; }
             public string self_total_bet_dice_litecoin { get; set; }
             public string self_total_bet_dice_bcash { get; set; }
             public string self_total_bet_dice_dogecoin { get; set; }*/
+            [JsonPropertyName("self-total-won-dice")]
             public string self_total_won_dice { get; set; }
             //public string self_total_won_dice_ether { get; set; }
             //public string self_total_won_dice_litecoin { get; set; }
@@ -695,6 +713,7 @@ namespace Gambler.Bot.Core.Sites
             //public string self_profit_percent_dice_litecoin { get; set; }
             //public string self_profit_percent_dice_bcash { get; set; }
             //public string self_profit_percent_dice_dogecoin { get; set; }
+            [JsonPropertyName("self-total-bets-dice")]
             public string self_total_bets_dice { get; set; }
             //public string self_total_bet_keno { get; set; }
             //public string self_total_bet_keno_ether { get; set; }
@@ -799,6 +818,7 @@ namespace Gambler.Bot.Core.Sites
 
         public class Chat
         {
+            [JsonPropertyName("max-id")]
             public long max_id { get; set; }
             public object msg { get; set; }
             public object delete { get; set; }
@@ -806,6 +826,7 @@ namespace Gambler.Bot.Core.Sites
 
         public class Game
         {
+            [JsonPropertyName("max-id")]
             public long[] max_id { get; set; }
             public object data { get; set; }
         }
@@ -814,6 +835,7 @@ namespace Gambler.Bot.Core.Sites
         public class DivestLock
         {
             public bool locked { get; set; }
+            [JsonPropertyName("lock-str")]
             public string lock_str { get; set; }
         }
 
@@ -837,9 +859,13 @@ namespace Gambler.Bot.Core.Sites
         {
             public object type { get; set; }
             public object address { get; set; }
+            [JsonPropertyName("address-eth")]
             public object address_eth { get; set; }
+            [JsonPropertyName("address-ltc")]
             public object address_ltc { get; set; }
+            [JsonPropertyName("address-bch")]
             public object address_bch { get; set; }
+            [JsonPropertyName("address-doge")]
             public object address_doge { get; set; }
             public string secret { get; set; }
         }
@@ -853,39 +879,69 @@ namespace Gambler.Bot.Core.Sites
 
         public class BitVestGetBalance
         {
+            [JsonPropertyName("self-user-id")]
             public int self_user_id { get; set; }
+            [JsonPropertyName("self-username")]
             public string self_username { get; set; }
             public decimal balance { get; set; }
+            [JsonPropertyName("token-balance")]
             public decimal token_balance { get; set; }
+            [JsonPropertyName("ether-balance")]
             public decimal ether_balance { get; set; }
+            [JsonPropertyName("litecoin-balance")]
             public decimal litecoin_balance { get; set; }
+            [JsonPropertyName("balance-dogecoin")]
             public decimal balance_dogecoin { get; set; }
+            [JsonPropertyName("balance-bcash")]
             public decimal balance_bcash { get; set; }
             public decimal pending { get; set; }
+            [JsonPropertyName("ether-pending")]
             public decimal ether_pending { get; set; }
+            [JsonPropertyName("litecoin-pending")]
             public decimal litecoin_pending { get; set; }
             public string address { get; set; }
+            [JsonPropertyName("ether-address")]
             public string ether_address { get; set; }
+            [JsonPropertyName("litecoin-address")]
             public string litecoin_address { get; set; }
+            [JsonPropertyName("total-bet")]
             public decimal total_bet { get; set; }
+            [JsonPropertyName("total-won")]
             public decimal total_won { get; set; }
+            [JsonPropertyName("total-profit")]
             public decimal total_profit { get; set; }
+            [JsonPropertyName("token-total-bet")]
             public decimal token_total_bet { get; set; }
+            [JsonPropertyName("token-total-won")]
             public decimal token_total_won { get; set; }
+            [JsonPropertyName("token-total-profit")]
             public decimal token_total_profit { get; set; }
+            [JsonPropertyName("ether-total-bet")]
             public decimal ether_total_bet { get; set; }
+            [JsonPropertyName("ether-total-won")]
             public decimal ether_total_won { get; set; }
+            [JsonPropertyName("ether-total-profit")]
             public decimal ether_total_profit { get; set; }
+            [JsonPropertyName("litecoin-total-bet")]
             public decimal litecoin_total_bet { get; set; }
+            [JsonPropertyName("litecoin-total-won")]
             public decimal litecoin_total_won { get; set; }
+            [JsonPropertyName("litecoin-total-profit")]
             public decimal litecoin_total_profit { get; set; }
+            [JsonPropertyName("dogecoin-total-bet")]
             public decimal dogecoin_total_bet { get; set; }
+            [JsonPropertyName("dogecoin-total-won")]
             public decimal dogecoin_total_won { get; set; }
+            [JsonPropertyName("dogecoin-total-profit")]
             public decimal dogecoin_total_profit { get; set; }
+            [JsonPropertyName("bcash-total-bet")]
             public decimal bcash_total_bet { get; set; }
+            [JsonPropertyName("bcash-total-won")]
             public decimal bcash_total_won { get; set; }
+            [JsonPropertyName("bcash-total-profit")]
             public decimal bcash_total_profit { get; set; }
             public decimal bets { get; set; }
+            [JsonPropertyName("server-hash")]
             public string server_hash { get; set; }
         }
 
@@ -911,18 +967,25 @@ namespace Gambler.Bot.Core.Sites
             public bool success { get; set; }
             public string msg { get; set; }
             public bitvestbetdata data { get; set; }
+            [JsonPropertyName("game-result")]
             public bitvestgameresult game_result { get; set; }
+            [JsonPropertyName("game-id")]
             public long game_id { get; set; }
             public string result { get; set; }
+            [JsonPropertyName("server-seed")]
             public string server_seed { get; set; }
+            [JsonPropertyName("server-hash")]
             public string server_hash { get; set; }
+            [JsonPropertyName("player-seed")]
             public string player_seed { get; set; }
         }
 
         public class SeedReset
         {
             public bool success { get; set; }
+            [JsonPropertyName("server-seed")]
             public string server_seed { get; set; }
+            [JsonPropertyName("server-hash")]
             public string server_hash { get; set; }
         }
 
@@ -931,12 +994,19 @@ namespace Gambler.Bot.Core.Sites
         {
             public string balance { get; set; }
             public string pending { get; set; }
+            [JsonPropertyName("balance-ether")]
             public string balance_ether { get; set; }
+            [JsonPropertyName("token-balance")]
             public string token_balance { get; set; }
+            [JsonPropertyName("balance-litecoin")]
             public string balance_litecoin { get; set; }
+            [JsonPropertyName("balance-dogecoin")]
             public string balance_dogecoin { get; set; }
+            [JsonPropertyName("balance-bcash")]
             public string balance_bcash { get; set; }
+            [JsonPropertyName("self-username")]
             public string self_username { get; set; }
+            [JsonPropertyName("self-user-id")]
             public long self_user_id { get; set; }
 
 
@@ -945,6 +1015,7 @@ namespace Gambler.Bot.Core.Sites
         {
             public decimal roll { get; set; }
             public decimal win { get; set; }
+            [JsonPropertyName("total-bet")]
             public decimal total_bet { get; set; }
             public decimal multiplier { get; set; }
         }
