@@ -22,6 +22,8 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using static Gambler.Bot.Core.Sites.Bitvest;
 using static Gambler.Bot.Core.Sites.NitrogenSports;
+using System.Collections.Generic;
+using System.Linq.Expressions;
 
 namespace Gambler.Bot.Core.Sites
 {
@@ -42,6 +44,7 @@ namespace Gambler.Bot.Core.Sites
 
         public DiceConfig DiceSettings { get; set; }
         public RangeDiceConfig RangeDiceSettings { get; set; }
+        Dictionary<string, (bool, string)> balances = new Dictionary<string, (bool, string)>();
 
         public DuckDice(ILogger logger) : base(logger)
         {
@@ -53,7 +56,7 @@ namespace Gambler.Bot.Core.Sites
             this.Mirrors.Add("https://duckdice.io");
             this.Mirrors.Add("https://duckdice.me");
             this.Mirrors.Add("https://duckdice.net");
-            this.GameModes.Add("Faucet");
+            //this.GameModes.Add("Faucet");
             AffiliateCode = "?c=53ea652da4";
             this.Stats = new SiteStats();
             this.TipUsingName = true;
@@ -76,6 +79,7 @@ namespace Gambler.Bot.Core.Sites
             RangeDiceSettings = new RangeDiceConfig() { Edge = 1, MaxRoll = 99.99m, SupportsDouble = false };
             NonceBased = true;
             SupportsBrowserLogin = false;
+            balances.Add("Normal", (false, null));
         }
 
         void GetBalanceThread()
@@ -134,20 +138,49 @@ namespace Gambler.Bot.Core.Sites
                     }
                 }
 
-                var EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
+                var EmitResponse = await Client.GetAsync("bot/user-info" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                 var sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 int retriees = 0;
                 while (!EmitResponse.IsSuccessStatusCode && retriees++ < 5)
                 {
                     await CallCFCaptchaBypass(sEmitResponse);
                     await Task.Delay(Random.Next(50, 150) * retriees);
-                    EmitResponse = await Client.GetAsync("load/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
+                    EmitResponse = await Client.GetAsync("bot/user-info"  + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     sEmitResponse = await EmitResponse.Content.ReadAsStringAsync();
                 }
 
                 if (EmitResponse.IsSuccessStatusCode)
                 {
-                    Quackbalance balance = JsonSerializer.Deserialize<Quackbalance>(sEmitResponse);
+                    QuackUserInfo balance = JsonSerializer.Deserialize<QuackUserInfo>(sEmitResponse);
+                    /* var jdoc = JsonDocument.Parse(sEmitResponse);
+                     var balancesnode = jdoc.RootElement.GetProperty("user").GetProperty("balances");
+                     List<string> balanceTyps = new List<string>();
+                     foreach (var x in balancesnode.EnumerateObject())
+                     {
+                         balanceTyps.Add(x.Name);
+                     }*/
+                    foreach (var x in balance.wageringBonuses)
+                    {
+                        if (x.status == "active")
+                        {
+                            balances.Add(x.name, (false, x.hash));
+                        }
+                    }
+                    foreach (var x in balance.tle)
+                    {
+                        if (x.status == "active")
+                        {
+                            balances.Add(x.name, (true, x.hash));
+                        }
+                    }
+                    foreach(var x in balances.Keys)
+                    {
+                        if (!this.GameModes.Contains(x))
+                        {
+                            this.GameModes.Add(x);
+                        }
+                    }
+                   
                     sEmitResponse = await Client.GetStringAsync("bot/stats/" + CurrentCurrency + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken));
                     QuackStatsDetails _Stats = JsonSerializer.Deserialize<QuackStatsDetails>(sEmitResponse);
                     /*sEmitResponse = await Client.GetStringAsync("randomize" + (string.IsNullOrWhiteSpace(accesstoken)?"": "?api_key=" + accesstoken));
@@ -156,13 +189,13 @@ namespace Gambler.Bot.Core.Sites
                     {
                         if (this.SelectedGameMode == "Normal")
                         {
-                            Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
+                            Stats.Balance = decimal.Parse(balance.balances.FirstOrDefault(x=>x.currency.ToLower() == CurrentCurrency.ToLower())?.main, System.Globalization.NumberFormatInfo.InvariantInfo);
                         }
-                        else
+                        /*else
                         {
                             Stats.Balance = decimal.Parse(balance.user.balances.faucet, System.Globalization.NumberFormatInfo.InvariantInfo);
-                        }
-                        Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
+                        }*/
+                        //Stats.Balance = decimal.Parse(balance.user.balances.main, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Profit = decimal.Parse(_Stats.profit, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Wagered = decimal.Parse(_Stats.volume, System.Globalization.NumberFormatInfo.InvariantInfo);
                         Stats.Bets = _Stats.bets;
@@ -337,7 +370,16 @@ namespace Gambler.Bot.Core.Sites
             decimal amount = BetDetails.Amount;
             decimal chance = BetDetails.Chance;
             bool High = BetDetails.High;
-            StringContent Content = new StringContent(string.Format(System.Globalization.NumberFormatInfo.InvariantInfo, "{{\"amount\":\"{0:0.00000000}\",\"symbol\":\"{1}\",\"chance\":{2:0.00},\"isHigh\":{3},\"faucet\":{4}}}", amount, CurrentCurrency, chance, High ? "true" : "false", (SelectedGameMode == "Faucet").ToString().ToLower()), Encoding.UTF8, "application/json");
+            
+            duckPlaceBet tmpBet = new duckPlaceBet {
+                amount= amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo),
+                symbol=CurrentCurrency,
+                chance= chance.ToString("0.00", System.Globalization.NumberFormatInfo.InvariantInfo),
+                isHigh = High,
+                tleHash = balances[SelectedGameMode].Item1 ? balances[SelectedGameMode].Item2 : default,
+                userWageringBonusHash = balances[SelectedGameMode].Item1 ? default : balances[SelectedGameMode].Item2
+            };
+            StringContent Content = new StringContent(JsonSerializer.Serialize(tmpBet), Encoding.UTF8, "application/json");
             try
             {
                 var response = await Client.PostAsync("play" + (string.IsNullOrWhiteSpace(accesstoken) ? "" : "?api_key=" + accesstoken), Content);
@@ -481,7 +523,12 @@ namespace Gambler.Bot.Core.Sites
         {
             decimal amount = BetDetails.Amount;
 
-            duckPlaceRangeBet placebet = new duckPlaceRangeBet { amount = BetDetails.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo), isIn = BetDetails.Type == RangeDiceType.In, symbol = CurrentCurrency, };
+            duckPlaceRangeBet placebet = new duckPlaceRangeBet 
+            { amount = BetDetails.Amount.ToString("0.00000000", System.Globalization.NumberFormatInfo.InvariantInfo), 
+                isIn = BetDetails.Type == RangeDiceType.In, symbol = CurrentCurrency,
+                tleHash = balances[SelectedGameMode].Item1 ? balances[SelectedGameMode].Item2:default,
+                userWageringBonusHash = balances[SelectedGameMode].Item1 ? default: balances[SelectedGameMode].Item2 
+            };
             placebet.range = new int[] { (int)(BetDetails.Min * 100), (int)(BetDetails.Max * 100) };
             StringContent Content = new StringContent(JsonSerializer.Serialize(placebet), Encoding.UTF8, "application/json");
             try
@@ -641,6 +688,55 @@ namespace Gambler.Bot.Core.Sites
             public string main { get; set; }
             public string faucet { get; set; }
         }
+        public class QuackUserInfo
+        {
+            public string hash { get; set; }
+            public string username { get; set; }
+            public int createdAt { get; set; }
+            public string campaign { get; set; }
+            public string affiliate { get; set; }
+            public QuackLastdeposit lastDeposit { get; set; }
+            public QuackWagered[] wagered { get; set; }
+            public QuackBalance[] balances { get; set; }
+            public QuackWageringbonus[] wageringBonuses { get; set; }
+            public QuackTle[] tle { get; set; }
+        }
+
+        public class QuackLastdeposit
+        {
+            public int createdAt { get; set; }
+            public string currency { get; set; }
+            public string amount { get; set; }
+        }
+
+        public class QuackWagered
+        {
+            public string currency { get; set; }
+            public string amount { get; set; }
+        }
+
+        public class QuackBalance
+        {
+            public string currency { get; set; }
+            public string main { get; set; }
+        }
+
+        public class QuackWageringbonus
+        {
+            public string name { get; set; }
+            public string type { get; set; }
+            public string hash { get; set; }
+            public string status { get; set; }
+            public string symbol { get; set; }
+            public string margin { get; set; }
+        }
+
+        public class QuackTle
+        {
+            public string hash { get; set; }
+            public string name { get; set; }
+            public string status { get; set; }
+        }
         public class QuackBank
         {
             public decimal amount { get; set; }
@@ -663,7 +759,15 @@ namespace Gambler.Bot.Core.Sites
             public object tleHash { get; set; }
             public object userWageringBonusHash { get; set; }
         }
-
+        public class duckPlaceBet
+        {
+            public string amount { get; set; }
+            public string symbol { get; set; }
+            public bool isHigh { get; set; }
+            public string chance { get; set; }
+            public object tleHash { get; set; }
+            public object userWageringBonusHash { get; set; }
+        }
 
         public class QuakRangeBetResponse
         {
